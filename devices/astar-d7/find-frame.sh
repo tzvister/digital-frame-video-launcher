@@ -1,7 +1,7 @@
 #!/bin/bash
 # Find the frame on the LAN and print its adb address (ip:5555).
-#   tools/find-frame.sh            -> prints e.g. 192.168.1.50:5555
-#   . tools/find-frame.sh          -> defines find_frame for other scripts
+#   devices/astar-d7/find-frame.sh            -> prints e.g. 192.168.1.50:5555
+#   . devices/astar-d7/find-frame.sh          -> defines find_frame for other scripts
 #
 # Cheap frames often pick a new random Wi-Fi MAC, and so a new DHCP IP, on every
 # boot. The frame is identified by its product name over adb, not by address:
@@ -9,7 +9,7 @@
 #   FRAME_MAC_PREFIX  Wi-Fi vendor prefix to try first (default 00:e0:4c, Realtek)
 #   FRAME_NETS        networks to sweep, e.g. "192.168.1.0/24" (default: the Mac's own)
 
-_FF_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+_FF_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # Is ip:5555 the frame? Its Wi-Fi dozes (replies can take ~1 s and connects can
 # fail), and a stale "offline" adb transport makes every command fail, so start

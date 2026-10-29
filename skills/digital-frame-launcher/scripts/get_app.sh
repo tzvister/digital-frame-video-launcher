@@ -18,7 +18,7 @@ elif [ "$1" != --no-pull ] && [ -d "$REPO_DIR/.git" ]; then
 fi
 
 SDK_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
-JDK="${VIDEOLOOP_JAVA_HOME:-/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home}"
+JDK="${VIDEOLOOP_JAVA_HOME:-$(brew --prefix openjdk@17 2>/dev/null)/libexec/openjdk.jdk/Contents/Home}"
 if [ ! -x "$SDK_HOME/build-tools/34.0.0/aapt2" ] || [ ! -f "$SDK_HOME/platforms/android-34/android.jar" ] \
    || [ ! -x "$JDK/bin/javac" ]; then
   die "the Android build toolchain is missing. With the user's OK, install it (Homebrew JDK 17 + Android SDK, ~1 GB, no sudo): $REPO_DIR/tools/setup-toolchain.sh"

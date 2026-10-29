@@ -18,6 +18,13 @@ else
 fi
 FRAMES_DIR="${VIDEOLOOP_FRAMES:-$REPO_DIR/frames}"   # per-frame records, git-ignored
 
+# adb: use the one on PATH, else the Android SDK's copy (tools/setup-toolchain.sh).
+if ! command -v adb >/dev/null 2>&1; then
+  for d in "${ANDROID_HOME:-$HOME/Library/Android/sdk}/platform-tools" "$HOME/Library/Android/sdk/platform-tools"; do
+    [ -x "$d/adb" ] && { PATH="$d:$PATH"; export PATH; break; }
+  done
+fi
+
 die()  { echo "ERROR: $*" >&2; exit 1; }
 warn() { echo "WARN: $*" >&2; }
 info() { echo "$*" >&2; }

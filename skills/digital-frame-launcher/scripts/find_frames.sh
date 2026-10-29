@@ -15,11 +15,27 @@ mask_bits() {   # 0xfffffc00 or 255.255.252.0 -> 22
   echo "$bits"
 }
 
+# The Mac's own local networks as ip/bits. VPN and virtual adapters (Tailscale, Docker,
+# VMs, ...) and the CGNAT range VPNs use are skipped: frames sit on the home LAN, and
+# sweeping a VPN could reach devices that aren't the user's.
 networks() {
   if [ -n "$FRAME_NETS" ]; then echo "$FRAME_NETS" | tr ' ,' '\n\n'; return; fi
-  ifconfig 2>/dev/null | awk '/inet / && $2 != "127.0.0.1" && $2 !~ /^169\.254\./ {print $2, $4}' |
-  while read -r ip mask; do
-    bits=$(mask_bits "$mask")
+  {
+    if command -v ifconfig >/dev/null 2>&1; then
+      ifconfig 2>/dev/null | awk '
+        /^[^ \t]/ { iface = $1; sub(/:$/, "", iface) }
+        $1 == "inet" { ip = $2; sub(/^addr:/, "", ip); m = $4; sub(/^Mask:/, "", m); print iface, ip, m }'
+    elif command -v ip >/dev/null 2>&1; then
+      ip -4 -o addr show 2>/dev/null | awk '{ split($4, a, "/"); print $2, a[1], "/" a[2] }'
+    fi
+  } | while read -r iface ip mask; do
+    case "$iface" in
+      lo*|utun*|ipsec*|gif*|stf*|awdl*|llw*|bridge*|vmnet*|vboxnet*|docker*|br-*|veth*|virbr*|tailscale*|zt*|wg*|tun*|tap*|anpi*) continue ;;
+    esac
+    case "$ip" in 127.*|169.254.*|"") continue ;; esac
+    o1="${ip%%.*}"; rest="${ip#*.}"; o2="${rest%%.*}"
+    [ "$o1" = 100 ] && [ "$o2" -ge 64 ] && [ "$o2" -le 127 ] && continue   # CGNAT (VPNs)
+    case "$mask" in /*) bits="${mask#/}" ;; *) bits="$(mask_bits "$mask")" ;; esac
     [ "$bits" -lt 22 ] && bits=24      # don't sweep huge networks; the Mac's own /24 only
     echo "$ip/$bits"
   done

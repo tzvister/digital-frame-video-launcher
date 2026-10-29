@@ -35,10 +35,16 @@ Each one that touches a frame takes `-s <serial>` (an `ip:5555` or USB serial).
 
 ## Before you start
 
-The Mac needs `adb` (`brew install android-platform-tools`) and, for building, a JDK
-17 + Android SDK (`get_app.sh` checks; `tools/setup-toolchain.sh` in the repo installs
-them, ~1 GB, no sudo — ask first). On first run adb may trigger a macOS firewall
-prompt that must be allowed (see references/adb-access.md).
+Requirements, so you can set expectations early:
+- **A Mac** (Apple Silicon or Intel) **with Homebrew**. `tools/setup-toolchain.sh` in
+  the repo installs everything else (adb, JDK 17, Android SDK; ~1 GB, no sudo) — ask
+  the user before running it. If Homebrew is missing, point them to https://brew.sh.
+- **A frame that allows ADB**, over the network or a USB data cable, running Android
+  4.4 or newer. Many frames don't allow ADB out of the box; if `find_frames.sh` finds
+  nothing, that's the first thing to solve (references/adb-access.md). Root is optional.
+
+On first run adb may trigger a macOS firewall prompt that must be allowed. The repo's
+`devices/` folder holds helpers for one specific frame model; don't use them on others.
 
 ## New frame: the full flow
 
@@ -90,9 +96,15 @@ then rerun.
 ### 6. Install and take over the home screen
 `scripts/install_app.sh -s <serial> <apk>` installs, grants storage access, writes the
 revert record on the frame first, then switches the home screen with the method above.
-If it prints `ACTION NEEDED`, tell the user exactly what to tap on the frame. Over a
-network connection with root, it also makes network adb survive reboots (recorded in
-the snapshot so revert can restore it).
+If it prints `ACTION NEEDED`, tell the user exactly what to tap on the frame.
+
+**Network ADB after reboots.** If the survey shows `adb_tcp_persist` empty and you're
+connected over the network, the frame will stop answering adb after its next reboot.
+Ask the user before deciding: keeping it on (`--keep-network-adb`, needs root) lets
+them — and Claude — manage the frame over Wi-Fi later, but leaves a debug port open on
+their network, root-capable on rooted frames. If they decline, the step-8 reboot test
+can't be checked over the network; ask them to confirm the video came back instead.
+`revert.sh --restore-adb` undoes the setting.
 
 If it stops because the installed VideoLoop **was signed with a different key** (built
 on another Mac, or the key was lost), that's normal and harmless. Explain it, and with

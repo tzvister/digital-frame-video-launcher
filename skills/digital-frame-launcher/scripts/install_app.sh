@@ -1,7 +1,13 @@
 #!/bin/bash
 # Install (or upgrade) VideoLoop and make it the frame's home screen, recording how,
 # so that revert.sh and the app's own menu can undo exactly that.
-#   scripts/install_app.sh -s <serial> <VideoLoop.apk> [--method preferred|disable|chooser] [--replace]
+#   scripts/install_app.sh -s <serial> <VideoLoop.apk> [--method preferred|disable|chooser]
+#                          [--replace] [--keep-network-adb]
+#
+# --keep-network-adb: make network adb survive reboots (persist.adb.tcp.port=5555, root
+#   needed). Only with the owner's OK: it lets them manage the frame over Wi-Fi later,
+#   but leaves a debug port open on their network (root-capable on rooted frames).
+#   Without it, the frame's own setting is left as it was. revert.sh --restore-adb undoes it.
 #
 # --replace: if the installed VideoLoop was signed with a different key (another Mac, or a
 #   lost debug.keystore), Android can't update it in place. With the user's OK this hands
@@ -20,12 +26,13 @@
 parse_serial "$@"
 ensure_connected
 
-APK=""; METHOD=""; REPLACE=no
+APK=""; METHOD=""; REPLACE=no; KEEP_ADB=no
 i=0
 while [ $i -lt ${#ARGS[@]} ]; do
   case "${ARGS[$i]}" in
     --method)  METHOD="${ARGS[$((i+1))]}"; i=$((i+2)) ;;
     --replace) REPLACE=yes; i=$((i+1)) ;;
+    --keep-network-adb) KEEP_ADB=yes; i=$((i+1)) ;;
     *)         APK="${ARGS[$i]}"; i=$((i+1)) ;;
   esac
 done
@@ -105,14 +112,22 @@ if ! is_videoloop "$(current_home)"; then
   done
 fi
 
-# 6. Keep network adb on across reboots, when we're connected over the network and can.
-case "$SERIAL" in
-  *:*)
-    if [ -z "$(prop persist.adb.tcp.port)" ] && [ "$ROOT_MODE" != none ]; then
-      as_root "setprop persist.adb.tcp.port 5555" >/dev/null
-      info "Set persist.adb.tcp.port=5555 so network adb survives reboots (original value recorded: empty)"
-    fi ;;
-esac
+# 6. Network adb after reboots: the owner's choice (see --keep-network-adb above).
+persist="$(prop persist.adb.tcp.port)"
+if [ -n "$persist" ]; then
+  echo "network_adb_after_reboot=yes (the frame already keeps it on: persist.adb.tcp.port=$persist)"
+elif [ "$KEEP_ADB" = yes ]; then
+  if [ "$ROOT_MODE" = none ]; then
+    warn "--keep-network-adb needs root, which this frame doesn't have; network adb will stop at the next reboot"
+    echo "network_adb_after_reboot=no"
+  else
+    as_root "setprop persist.adb.tcp.port 5555" >/dev/null
+    info "Set persist.adb.tcp.port=5555 (originally empty; revert.sh --restore-adb puts that back)"
+    echo "network_adb_after_reboot=yes"
+  fi
+else
+  echo "network_adb_after_reboot=no (unchanged; after a reboot, reach the frame by USB or re-enable adb on it)"
+fi
 
 NOW="$(current_home)"
 echo "method=$METHOD"

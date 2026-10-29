@@ -3,11 +3,19 @@
 set -e
 
 # Toolchain from tools/setup-toolchain.sh; override with ANDROID_HOME / VIDEOLOOP_JAVA_HOME.
+# The JDK is found through Homebrew, so Apple Silicon (/opt/homebrew) and Intel
+# (/usr/local) Macs both work.
 export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
-export JAVA_HOME="${VIDEOLOOP_JAVA_HOME:-/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home}"
+JDK17="$(brew --prefix openjdk@17 2>/dev/null)/libexec/openjdk.jdk/Contents/Home"
+export JAVA_HOME="${VIDEOLOOP_JAVA_HOME:-$JDK17}"
 
 BT="$ANDROID_HOME/build-tools/34.0.0"
 PLAT="$ANDROID_HOME/platforms/android-34/android.jar"
+if [ ! -x "$JAVA_HOME/bin/javac" ] || [ ! -x "$BT/aapt2" ] || [ ! -f "$PLAT" ]; then
+  echo "Build toolchain not found (JDK 17 at '$JAVA_HOME', Android SDK at '$ANDROID_HOME')." >&2
+  echo "Install it once with: tools/setup-toolchain.sh" >&2
+  exit 1
+fi
 PROJ="$(cd "$(dirname "$0")" && pwd)"
 OUT="$PROJ/build"
 
@@ -45,7 +53,7 @@ echo "=== 5. zipalign ==="
 echo "=== 6. sign ==="
 KS="${VIDEOLOOP_KEYSTORE:-$PROJ/debug.keystore}"   # created on first build if missing
 if [ ! -f "$KS" ]; then
-  keytool -genkeypair -keystore "$KS" -alias videoloop \
+  "$JAVA_HOME/bin/keytool" -genkeypair -keystore "$KS" -alias videoloop \
     -storepass android -keypass android \
     -keyalg RSA -keysize 2048 -validity 10000 \
     -dname "CN=VideoLoop,O=Frame,C=US"
