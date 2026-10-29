@@ -88,7 +88,10 @@ tools/setup-toolchain.sh   # once
 ./build.sh                 # -> VideoLoop.apk
 ```
 
-Bump `versionCode`/`versionName` in `AndroidManifest.xml` for each release.
+Bump `versionCode`/`versionName` in `AndroidManifest.xml` for each release. Without
+Homebrew, install JDK 17 and the Android SDK (build-tools 34, platform 34) yourself
+and point the build at them with `VIDEOLOOP_JAVA_HOME=<jdk home>` and
+`ANDROID_HOME=<sdk>`.
 
 **About `debug.keystore`.** It isn't in the repo: `build.sh` creates one on the first
 build, so each person (or Mac) gets their own, and one key covers all of their frames.

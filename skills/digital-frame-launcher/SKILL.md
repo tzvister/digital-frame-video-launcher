@@ -49,8 +49,13 @@ On first run adb may trigger a macOS firewall prompt that must be allowed. The r
 ## New frame: the full flow
 
 ### 1. Find and connect
-`scripts/find_frames.sh` lists USB devices and sweeps the Mac's networks for adb on
-port 5555 (3 s per host, because frame Wi-Fi dozes). Each line shows serial, model,
+If the user can see the frame's IP (its Wi-Fi settings, the router's client list, or
+VideoLoop's *Network info*), check just that host: `FRAME_NETS=<ip>/32
+scripts/find_frames.sh`. Otherwise `scripts/find_frames.sh` lists USB devices and
+sweeps the Mac's local networks for adb on port 5555 (3 s per host, because frame
+Wi-Fi dozes). The sweep asks every device there with adb open to identify itself,
+which can pop an "Allow debugging?" prompt on, say, an Android TV, so mention that
+before sweeping a shared network. Each line shows serial, model,
 Android version, whether VideoLoop is installed, and the frame's name if it was set
 up before. Frames' IPs often change on every boot, so go by name, not address. If
 several devices appear, ask which one is the frame. If none appear, or one is `unauthorized`, read

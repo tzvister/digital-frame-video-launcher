@@ -48,6 +48,8 @@ port_open() {   # host -> exit 0 if adb's port answers within 3 s
 
 scan_net() {    # a.b.c.d/bits -> prints ip:5555 for every host with port 5555 open
   local ip="${1%/*}" bits="${1#*/}" base size i
+  [ "$bits" = "$1" ] && bits=32                       # a bare IP means just that host
+  if [ "$bits" -ge 31 ]; then port_open "$ip" && echo "$ip:5555"; return; fi
   base=$(( $(ip2int "$ip") & ((0xffffffff << (32 - bits)) & 0xffffffff) ))
   size=$(( 1 << (32 - bits) ))
   i=1

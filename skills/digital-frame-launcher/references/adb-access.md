@@ -30,8 +30,9 @@ client list, or (once VideoLoop runs) its hidden menu → *Network info*.
   `ioreg -p IOUSB -l -w0 | grep -E 'USB Product Name|idVendor'`. Allwinner devices
   often use vendor id `0x1f3a`; Google's adb id is `0x18d1`. Nothing new appearing
   when the cable is plugged in = no data connection.
-- Once on USB, `adb tcpip 5555` switches the frame to network adb (until reboot,
-  unless made persistent with root — `install_app.sh` does that when it can).
+- Once on USB, `adb tcpip 5555` switches the frame to network adb until the next
+  reboot. Keeping it on across reboots needs root and the owner's OK
+  (`install_app.sh --keep-network-adb`; see SKILL.md step 6 for the trade-off).
 
 ## 3. "Allow USB debugging?" (unauthorized)
 
