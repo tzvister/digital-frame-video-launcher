@@ -1,0 +1,1 @@
+net.frameo.frame/.ui.activities.AWaitForDeferredInitCompleted

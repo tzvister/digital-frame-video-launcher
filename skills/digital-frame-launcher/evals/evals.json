@@ -1,0 +1,24 @@
+{
+  "skill_name": "digital-frame-launcher",
+  "notes": "Runs against real hardware, so these are executed one at a time on a physical frame (no parallel or no-skill baseline runs: a single frame can't host them safely). Run 1 is the end-to-end acceptance test: start from a frame on its original launcher.",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I've got a Frameo photo frame on my Wi-Fi. Set it up so it just plays a video on loop when it turns on, and make sure I can put it back the way it was.",
+      "expected_output": "Frame found and surveyed with a plain-language compatibility report and the user's go-ahead; original state snapshotted (Mac + frame); app built and installed; VideoLoop is the home screen; test video loops (verify.sh passes); after a reboot the frame is found again and verify.sh passes; revert.sh --check reports OK; hand-off message explains the menu and how to undo.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "can you check whether my frame can still be reverted to the original launcher? don't change anything",
+      "expected_output": "Read-only: find_frames + survey + revert.sh --check; reports the recorded method and original home; no install, no reboot, no file changes.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "There's a new version of the video launcher in the repo, update the frame to it",
+      "expected_output": "get_app.sh builds the latest; install_app.sh upgrades keeping the recorded method; verify.sh and revert.sh --check pass; no snapshot overwritten; user media untouched.",
+      "files": []
+    }
+  ]
+}

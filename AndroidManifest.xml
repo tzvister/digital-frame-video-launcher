@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="videoloop.launcher"
+    android:versionCode="11"
+    android:versionName="2.0">
+
+    <!-- targetSdk 28: new enough that Android 14/15 install it without the
+         low-target block and Android 10+ skip the permission-review screen,
+         old enough to keep plain file access to /sdcard and memory cards. -->
+    <uses-sdk android:minSdkVersion="19" android:targetSdkVersion="28" />
+
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.REBOOT" />
+
+    <application
+        android:label="VideoLoop"
+        android:allowBackup="false"
+        android:requestLegacyExternalStorage="true">
+
+        <!-- The player. Normal launcher icon so it stays reachable even after
+             the HOME capability (below) is turned off during a revert. -->
+        <activity
+            android:name=".MainActivity"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+            android:configChanges="orientation|keyboardHidden|screenSize|keyboard|navigation|screenLayout|uiMode"
+            android:launchMode="singleInstance"
+            android:exported="true"
+            android:stateNotNeeded="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- HOME capability lives in a separate alias we can enable/disable
+             independently (this is what "revert on next reboot" toggles off). -->
+        <activity-alias
+            android:name=".HomeAlias"
+            android:targetActivity=".MainActivity"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity-alias>
+    </application>
+</manifest>

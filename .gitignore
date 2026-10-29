@@ -1,0 +1,16 @@
+# Build outputs — recreate with ./build.sh
+build/
+VideoLoop.apk
+*.idsig
+
+# Local only: raw firmware images of this one frame (large, device-specific)
+backup/
+
+.DS_Store
+
+# Per-frame records and backups made by the skill (device-specific)
+frames/
+
+# Signing key: kept locally, never published. Builds that update an installed
+# frame must use the same key, so back it up (e.g. a password manager).
+debug.keystore
