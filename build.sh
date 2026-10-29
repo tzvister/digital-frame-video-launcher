@@ -43,7 +43,7 @@ echo "=== 5. zipalign ==="
 "$BT/zipalign" -f 4 "$OUT/app-unsigned.apk" "$OUT/app-aligned.apk"
 
 echo "=== 6. sign ==="
-KS="$PROJ/debug.keystore"
+KS="${VIDEOLOOP_KEYSTORE:-$PROJ/debug.keystore}"   # created on first build if missing
 if [ ! -f "$KS" ]; then
   keytool -genkeypair -keystore "$KS" -alias videoloop \
     -storepass android -keypass android \

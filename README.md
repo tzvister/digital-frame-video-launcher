@@ -25,9 +25,11 @@ upgrades and reverts frames. Install it by linking it into Claude's skills folde
 ln -s "$PWD/skills/digital-frame-launcher" ~/.claude/skills/digital-frame-launcher
 ```
 
-Then ask Claude something like *"set up my photo frame to loop a video"*. Per-frame
-records (original state, backups) go to `frames/<frame-id>/` (git-ignored) and to
-`.videoloop/` on the frame. The skill's scripts are the generic, any-frame versions
+Then ask Claude something like *"set up my photo frame to loop a video"*. It asks
+what to call each frame ("Living room", ...): the name shows in VideoLoop's menu and
+*Network info*, and the skill lists frames by name, which helps when you have several
+and their IPs keep changing. Per-frame records (original state, name, backups) go to
+`frames/<frame-id>/` (git-ignored) and to `.videoloop/` on the frame. The skill's scripts are the generic, any-frame versions
 of the top-level `install.sh` / `revert.sh`, which remain for the original frame.
 
 ## The frame
@@ -84,12 +86,13 @@ frames/                          (local only, git-ignored) per-frame records fro
 backup/                          (local only, git-ignored) firmware images
 ```
 
-**Keep your `debug.keystore`.** It isn't in the repo: `build.sh` creates one on the
-first build. Android only upgrades an installed app when the new build is signed
-with the same key, so back the file up (e.g. in a password manager). If it's lost,
-updating an installed frame needs an uninstall first — and uninstalling the only
-home screen while the original one is disabled leaves the frame with no launcher, so
-run the revert first.
+**About `debug.keystore`.** It isn't in the repo: `build.sh` creates one on the first
+build, so each person (or Mac) gets their own, and one key covers all of their frames.
+Android only updates an installed app in place when the new build is signed with the
+same key. If the key differs — another Mac, or a lost key — the skill's
+`install_app.sh --replace` reinstalls instead: it hands the home screen back, swaps
+the app, takes over again and resumes the playing video (only the rotation setting
+resets). Keeping the key just saves that step.
 
 ## Build
 

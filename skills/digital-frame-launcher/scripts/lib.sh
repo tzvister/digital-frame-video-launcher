@@ -128,6 +128,9 @@ home_candidates() {
 
 is_videoloop() { case "$1" in "$APP_PKG"/*) return 0 ;; *) return 1 ;; esac; }
 
+# The name the user gave this frame (set_name.sh), or empty.
+frame_name() { sh_ "cat '$(primary)/$DEVICE_DIR/name' 2>/dev/null" | grep -v -i 'no such' | head -1; }
+
 kv_get() { sed -n "s/^$2=//p" "$1" 2>/dev/null | tail -1; }
 
 local_md5() { if command -v md5 >/dev/null; then md5 -q "$1"; else md5sum "$1" | awk '{print $1}'; fi; }

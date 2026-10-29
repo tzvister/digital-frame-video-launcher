@@ -1,7 +1,13 @@
 #!/bin/bash
 # Install (or upgrade) VideoLoop and make it the frame's home screen, recording how,
 # so that revert.sh and the app's own menu can undo exactly that.
-#   scripts/install_app.sh -s <serial> <VideoLoop.apk> [--method preferred|disable|chooser]
+#   scripts/install_app.sh -s <serial> <VideoLoop.apk> [--method preferred|disable|chooser] [--replace]
+#
+# --replace: if the installed VideoLoop was signed with a different key (another Mac, or a
+#   lost debug.keystore), Android can't update it in place. With the user's OK this hands
+#   the home screen back (revert.sh --uninstall), installs the new build, takes over again
+#   and resumes the video that was playing. Videos, the frame's name and records are kept;
+#   app settings (chosen video is restored, rotation is not) reset.
 #
 # Methods, in order of preference:
 #   preferred  Android 7+: set VideoLoop as the default home (cmd package set-home-activity).
@@ -14,9 +20,15 @@
 parse_serial "$@"
 ensure_connected
 
-APK="${ARGS[0]}"
-METHOD=""
-[ "${ARGS[1]}" = "--method" ] && METHOD="${ARGS[2]}"
+APK=""; METHOD=""; REPLACE=no
+i=0
+while [ $i -lt ${#ARGS[@]} ]; do
+  case "${ARGS[$i]}" in
+    --method)  METHOD="${ARGS[$((i+1))]}"; i=$((i+2)) ;;
+    --replace) REPLACE=yes; i=$((i+1)) ;;
+    *)         APK="${ARGS[$i]}"; i=$((i+1)) ;;
+  esac
+done
 [ -f "$APK" ] || die "APK not found: $APK (build it with scripts/get_app.sh)"
 
 ID="$(frame_id)"
@@ -28,11 +40,19 @@ ROOT_MODE="$(root_mode)"
 P="$(primary)"
 
 # 1. Install / upgrade.
+PREV_VIDEO=""
 out="$(a install -r "$APK" 2>&1)"
 echo "$out" | tail -2 >&2
 if ! echo "$out" | grep -q Success; then
-  echo "$out" | grep -q UPDATE_INCOMPATIBLE && die "a VideoLoop signed with a different key is installed. It must be uninstalled first (ask the user; make sure another home screen is enabled before uninstalling the current one)."
-  die "install failed"
+  echo "$out" | grep -qE 'UPDATE_INCOMPATIBLE|signatures do not match' || die "install failed"
+  [ "$REPLACE" = yes ] || die "the VideoLoop on this frame was signed with a different key, so it can't be updated in place. Ask the user, then rerun with --replace: the frame briefly shows its original home screen, the old app is removed and the new one installed; videos, name and records stay, and the playing video resumes."
+  # Remember what was playing, so the new install can carry on with it.
+  PREV_VIDEO="$(a logcat -d -s VideoLoop:I 2>/dev/null | tr -d '\r' | grep -oE 'play /.*' | tail -1 | sed 's/^play //')"
+  info "Different signing key: handing the home screen back and reinstalling (was playing: ${PREV_VIDEO:-unknown})"
+  "$(dirname "$0")/revert.sh" -s "$SERIAL" --uninstall >&2 || die "couldn't hand the home screen back; nothing was installed"
+  out="$(a install "$APK" 2>&1)"
+  echo "$out" | tail -1 >&2
+  echo "$out" | grep -q Success || die "reinstall failed; the frame is on its original home screen (run install_app.sh again)"
 fi
 
 # 2. Storage access (runtime permission since Android 6).
@@ -77,7 +97,7 @@ esac
 run_ok "pm enable $APP_HOME" root >/dev/null 2>&1 || true
 go_home
 
-if [ "$METHOD" = chooser ] || ! is_videoloop "$(current_home)"; then
+if ! is_videoloop "$(current_home)"; then
   echo "ACTION NEEDED: on the frame, choose 'VideoLoop' and tap 'Always' (waiting up to 2 minutes)"
   for i in $(seq 1 24); do
     is_videoloop "$(current_home)" && break
@@ -97,4 +117,11 @@ esac
 NOW="$(current_home)"
 echo "method=$METHOD"
 echo "home_now=$NOW"
-is_videoloop "$NOW" && echo "RESULT: VideoLoop is the home screen" || die "the home screen is $NOW, not VideoLoop"
+is_videoloop "$NOW" || die "the home screen is $NOW, not VideoLoop"
+
+# 7. After a --replace, carry on with the video that was playing before.
+if [ -n "$PREV_VIDEO" ] && [ "$(sh_ "[ -f '$PREV_VIDEO' ] && echo yes")" = yes ]; then
+  a shell "am start -n $APP_MAIN -a $APP_PKG.PLAY --es path '$PREV_VIDEO'" >/dev/null 2>&1
+  echo "resumed_video=$PREV_VIDEO"
+fi
+echo "RESULT: VideoLoop is the home screen"

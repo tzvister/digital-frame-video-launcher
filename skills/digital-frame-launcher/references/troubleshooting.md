@@ -27,10 +27,13 @@ screenshot is fine — just don't use it as evidence of looping.
 If `verify.sh` shows 0–1 events, check the log for `no video to play` (storage
 permission or path) and for MediaPlayer errors: `adb logcat -d | grep -iE 'VideoLoop|MediaPlayer'`.
 
-**`install_app.sh`: INSTALL_FAILED_UPDATE_INCOMPATIBLE.** A VideoLoop signed with a
-different key is installed. Uninstalling it removes the home screen it provides, so
-first make sure another home is enabled (`revert.sh` does that), then uninstall and
-install again. Keep `debug.keystore` in the repo so this doesn't happen.
+**`install_app.sh`: "signed with a different key" (INSTALL_FAILED_UPDATE_INCOMPATIBLE).**
+The frame's VideoLoop was built on another Mac, or with a key that has since been lost
+(`build.sh` makes a new `debug.keystore` when there is none). Android can't update it in
+place. With the user's OK, rerun with `--replace`: it hands the home screen back
+(`revert.sh --uninstall`, which first makes sure the original home is enabled), installs
+the new build, takes over again and resumes the video that was playing. Tested on the
+astar-d7 in both directions. Only the rotation setting resets.
 
 **`set-home-activity` refused (Android 7+).** Some vendor builds block it. Fall back to
 `--method chooser` (user taps VideoLoop + Always), or `--method disable` if rooted.

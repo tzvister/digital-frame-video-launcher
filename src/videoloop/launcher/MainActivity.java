@@ -114,6 +114,8 @@ public class MainActivity extends Activity {
     // and original_home=<pkg/.Activity>. The older Frameo-only file is still honoured.
     private static final String STATE_FILE = ".videoloop/state";
     private static final String LEGACY_HOME_FILE = ".videoloop/frameo_home";
+    // The frame's name, set by the installer (people often have several frames).
+    private static final String NAME_FILE = ".videoloop/name";
 
     // Filesystems that removable cards / USB sticks show up as, across Android versions.
     private static final String REMOVABLE_FS =
@@ -365,7 +367,7 @@ public class MainActivity extends Activity {
             "Cancel"
         };
         new AlertDialog.Builder(this)
-            .setTitle("VideoLoop")
+            .setTitle(frameName() != null ? LRM + "VideoLoop — " + frameName() : "VideoLoop")
             .setItems(items, new DialogInterface.OnClickListener() {
                 @Override public void onClick(DialogInterface dlg, int which) {
                     switch (which) {
@@ -421,13 +423,23 @@ public class MainActivity extends Activity {
 
     // ---------------- network info ----------------
 
+    /** The frame's name from the installer, or null if none was set. */
+    private String frameName() {
+        String n = firstLine(new File(localRoot(), NAME_FILE).getPath());
+        if (n == null) return null;
+        n = n.trim();
+        return n.length() == 0 ? null : n;
+    }
+
     private void showNetworkInfo() {
         String ip = ipAddress();
         String mac = macAddress();
+        String name = frameName();
         menuOpen = true;
         new AlertDialog.Builder(this)
             .setTitle("Network info")
-            .setMessage("IP address:\n" + (ip != null ? ip : "unknown (not connected?)")
+            .setMessage((name != null ? "Frame:\n" + name + "\n\n" : "")
+                        + "IP address:\n" + (ip != null ? ip : "unknown (not connected?)")
                         + "\n\nMAC address:\n" + mac
                         + "\n(some frames pick a new MAC on every reboot,"
                         + " so the IP can change after a reboot)"

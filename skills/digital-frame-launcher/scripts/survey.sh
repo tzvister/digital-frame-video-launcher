@@ -15,6 +15,7 @@ HOME_NOW="$(current_home)"
 
 kv serial "$SERIAL"
 kv frame_id "$(frame_id)"
+kv frame_name "$(frame_name)"
 kv manufacturer "$(prop ro.product.manufacturer)"
 kv model "$(prop ro.product.model)"
 kv device "$(prop ro.product.device)"

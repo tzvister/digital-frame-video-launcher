@@ -45,8 +45,9 @@ prompt that must be allowed (see references/adb-access.md).
 ### 1. Find and connect
 `scripts/find_frames.sh` lists USB devices and sweeps the Mac's networks for adb on
 port 5555 (3 s per host, because frame Wi-Fi dozes). Each line shows serial, model,
-Android version and whether VideoLoop is installed. If several devices appear, ask
-which one is the frame. If none appear, or one is `unauthorized`, read
+Android version, whether VideoLoop is installed, and the frame's name if it was set
+up before. Frames' IPs often change on every boot, so go by name, not address. If
+several devices appear, ask which one is the frame. If none appear, or one is `unauthorized`, read
 **references/adb-access.md** and walk the user through it.
 
 ### 2. Survey and decide
@@ -54,7 +55,7 @@ which one is the frame. If none appear, or one is `unauthorized`, read
 `verdict=ok|warn|block` and `notes=`. Present it as a short report, for example:
 
 ```
-Frame: <manufacturer model> — Android <android> (API <sdk>), <display>, root: <root>
+Frame: <frame_name or "not named yet"> — <manufacturer model>, Android <android> (API <sdk>), <display>, root: <root>
 Home screen now: <home_current>
 Storage: <primary_storage> (<primary_free>); cards/USB: <removable_mounts or "none mounted">
 Wi-Fi: <wifi_iface> <ip> (MAC <wifi_mac>)   Rotation sensor: <accelerometer>
@@ -93,6 +94,19 @@ If it prints `ACTION NEEDED`, tell the user exactly what to tap on the frame. Ov
 network connection with root, it also makes network adb survive reboots (recorded in
 the snapshot so revert can restore it).
 
+If it stops because the installed VideoLoop **was signed with a different key** (built
+on another Mac, or the key was lost), that's normal and harmless. Explain it, and with
+the user's OK rerun with `--replace`: the frame briefly shows its original home screen,
+the old app is removed, the new one installed and put back in charge, and the video
+that was playing resumes. Videos, the frame's name and records stay; the rotation
+setting resets.
+
+**Name the frame.** People usually end up with several frames, and their IPs change,
+so ask what to call this one (e.g. "Living room", "Kitchen"; suggest something if they
+don't mind) and run `scripts/set_name.sh -s <serial> "<name>"`. The name shows in
+VideoLoop's menu title and *Network info*, in `find_frames.sh`, and in the survey.
+Rename any time by running it again.
+
 ### 7. Load the test video
 `scripts/set_video.sh -s <serial> assets/test-video.mp4 --name loop.mp4` copies the
 bundled 4-second 1280×800 test pattern into `<storage>/VideoLoop/` and tells VideoLoop
@@ -114,7 +128,7 @@ the deliverable.
 
 ### 10. Hand off
 Tell the user, briefly:
-- The frame now boots into the looping video; which video is playing.
+- The frame's name, and that it now boots into the looping video; which video is playing.
 - Hidden menu: two-finger press-and-hold ~1.5 s → choose video, import from memory
   card/USB, screen rotation, network info (IP/MAC), Android settings, restore the
   original home screen, reboot.
@@ -127,8 +141,10 @@ Tell the user, briefly:
 ## Upgrade an existing frame
 Find the frame, `survey.sh` (shows the installed version and recorded method),
 `get_app.sh`, then `install_app.sh` — it keeps the method from the first install, so
-revert still undoes the right thing. Then `verify.sh` and `revert.sh --check`. If no
-snapshot exists on the Mac, `snapshot.sh` recovers it from the frame's copy.
+revert still undoes the right thing (and needs `--replace`, with OK, if this Mac's
+signing key differs from the one that installed it). Then `verify.sh` and
+`revert.sh --check`. If no snapshot exists on the Mac, `snapshot.sh` recovers it from
+the frame's copy. If the survey shows no `frame_name`, offer to name the frame.
 
 ## Revert a frame
 Confirm with the user first, and explain the options:
@@ -136,8 +152,9 @@ Confirm with the user first, and explain the options:
 - `--uninstall`: also remove VideoLoop.
 - `--restore-adb`: put the network-adb setting back as it was originally. If it was
   off, the frame becomes unreachable over the network after the next reboot — say so.
-- `--clean`: also remove VideoLoop's records (`.videoloop/`). Videos in `VideoLoop/`
-  are never touched; ask separately if the user wants them deleted.
+- `--clean`: also remove VideoLoop's records (`.videoloop/`, including the frame's
+  name). Videos in `VideoLoop/` are never touched; ask separately if the user wants
+  them deleted.
 
 Run `scripts/revert.sh -s <serial> [options]`, then (with OK) reboot, find the frame
 again, and confirm with `survey.sh` that `home_current` is the original from the
@@ -150,7 +167,8 @@ card insert). For version- or vendor-specific differences, **references/compatib
 
 ## Files
 - `scripts/` — `lib.sh` (shared), `find_frames.sh`, `survey.sh`, `snapshot.sh`,
-  `backup.sh`, `get_app.sh`, `install_app.sh`, `set_video.sh`, `verify.sh`, `revert.sh`
+  `backup.sh`, `get_app.sh`, `install_app.sh`, `set_name.sh`, `set_video.sh`,
+  `verify.sh`, `revert.sh`
 - `assets/test-video.mp4` — 4 s generated test pattern (ffmpeg `testsrc2`), 1280×800,
   H.264 High, no audio
 - `references/` — `adb-access.md`, `compatibility.md`, `troubleshooting.md`

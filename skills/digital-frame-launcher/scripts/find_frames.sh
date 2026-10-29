@@ -62,7 +62,10 @@ describe() {    # serial -> one summary line
   fi
   g() { adb -s "$S" shell getprop "$1" 2>/dev/null | tr -d '\r'; }
   vl="$(adb -s "$S" shell dumpsys package "$APP_PKG" 2>/dev/null | tr -d '\r' | grep -m1 versionName | sed 's/.*versionName=//')"
-  echo "$S | $(g ro.product.manufacturer) $(g ro.product.model) | Android $(g ro.build.version.release) (API $(g ro.build.version.sdk)) | $(g ro.product.device)/$(g ro.board.platform) | VideoLoop: ${vl:-not installed}"
+  nm="$(adb -s "$S" shell 'cat "${EXTERNAL_STORAGE:-/sdcard}/.videoloop/name" 2>/dev/null' 2>/dev/null \
+        | tr -d '\r' | grep -v -i 'no such' | head -1)"
+  # The name goes last so the earlier fields keep their positions for tools that parse them.
+  echo "$S | $(g ro.product.manufacturer) $(g ro.product.model) | Android $(g ro.build.version.release) (API $(g ro.build.version.sdk)) | $(g ro.product.device)/$(g ro.board.platform) | VideoLoop: ${vl:-not installed}${nm:+ | name: $nm}"
 }
 
 command -v adb >/dev/null || die "adb not found. Install it: brew install android-platform-tools"
