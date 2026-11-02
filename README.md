@@ -30,12 +30,15 @@ automatically (it's linked from `.claude/skills/`). It:
 
 1. finds the frame on the network or USB,
 2. surveys compatibility and shows you a plain-language report,
-3. records the frame's original state (so it can be put back exactly),
-4. backs up the boot partitions (rooted frames),
-5. builds VideoLoop and makes it the home screen, the right way for that Android
+3. checks the frame's security: hidden root agents that phone home (like `iotv`),
+   vendor firmware updaters, hard-coded DNS and open ports. If it finds an agent, it
+   helps you remove it before going further,
+4. records the frame's original state (so it can be put back exactly),
+5. offers a backup of the boot partitions (rooted frames; your choice),
+6. builds VideoLoop and makes it the home screen, the right way for that Android
    version and root situation,
-6. asks what to call the frame (you'll likely have several, and their IPs change),
-7. loads a test video, verifies the loop across a reboot, and confirms it can be reverted.
+7. asks what to call the frame (you'll likely have several, and their IPs change),
+8. loads a test video, verifies the loop across a reboot, and confirms it can be reverted.
 
 It stops for your OK before changing anything on the frame, installing software on
 the Mac, rebooting, or reverting. It also upgrades and reverts frames later. Other

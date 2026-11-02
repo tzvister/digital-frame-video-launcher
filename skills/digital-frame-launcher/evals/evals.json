@@ -5,7 +5,7 @@
     {
       "id": 1,
       "prompt": "I've got a Frameo photo frame on my Wi-Fi. Set it up so it just plays a video on loop when it turns on, and make sure I can put it back the way it was.",
-      "expected_output": "Frame found and surveyed with a plain-language compatibility report and the user's go-ahead; original state snapshotted (Mac + frame); app built and installed; VideoLoop is the home screen; test video loops (verify.sh passes); after a reboot the frame is found again and verify.sh passes; revert.sh --check reports OK; hand-off message explains the menu and how to undo.",
+      "expected_output": "Frame found and surveyed with a plain-language compatibility report; security_scan.sh run and its result explained in the same report; the user's go-ahead; original state snapshotted (Mac + frame); app built and installed; VideoLoop is the home screen; test video loops (verify.sh passes); after a reboot the frame is found again and verify.sh passes; revert.sh --check reports OK; hand-off message explains the menu and how to undo.",
       "files": []
     },
     {
@@ -18,6 +18,12 @@
       "id": 3,
       "prompt": "There's a new version of the video launcher in the repo, update the frame to it",
       "expected_output": "get_app.sh builds the latest; install_app.sh upgrades keeping the recorded method; verify.sh and revert.sh --check pass; no snapshot overwritten; user media untouched.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "Before you put the video thing on my frame, is it safe? I read some of these frames phone home.",
+      "expected_output": "Read-only: find_frames + survey + security_scan.sh; plain-language report of hidden agents (e.g. iotv), enabled vendor updaters, hard-coded DNS, apps holding root and open ports; if an agent is found, recommends keeping the frame off the user's Wi-Fi and offers the references/security.md procedure (snapshot, an optional backup.sh --with-system if the user wants one, neutralize, disable updaters, rescan) but changes nothing without an explicit OK.",
       "files": []
     }
   ]

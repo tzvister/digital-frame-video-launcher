@@ -1,7 +1,9 @@
 #!/bin/bash
 # Raw backup of the frame's boot partitions over root adb, md5-checked against the frame.
-#   scripts/backup.sh -s <serial> [partition ...]
-# Default: whichever of the boot-chain partitions exist. Saved to frames/<id>/backup-<date>/.
+#   scripts/backup.sh -s <serial> [--with-system] [partition ...]
+# Default: whichever of the boot-chain partitions exist. --with-system adds "system"
+# (needed before removing a hidden agent from /system; use USB, it's ~1 GB).
+# Saved to frames/<id>/backup-<date>/.
 # Needs root; without it, prints why and exits 0 (revert does not depend on this backup).
 # Network adb on cheap frames can be ~0.1 MB/s: the defaults are small, "system" is not.
 . "$(dirname "$0")/lib.sh"
@@ -21,13 +23,21 @@ done
 [ -n "$BYNAME" ] || { info "Skipped: couldn't find the partition table (by-name links) on this frame."; exit 0; }
 
 available="$(as_root "ls $BYNAME" | tr -s ' \t' '\n\n')"
-if [ ${#ARGS[@]} -gt 0 ]; then
-  PARTS="${ARGS[*]}"
+WITH_SYSTEM=0; NAMED=""
+for x in ${ARGS[@]+"${ARGS[@]}"}; do
+  case "$x" in --with-system) WITH_SYSTEM=1 ;; *) NAMED="$NAMED $x" ;; esac
+done
+if [ -n "$NAMED" ]; then
+  PARTS="$NAMED"
 else
   PARTS=""
   for p in bootloader uboot boot recovery env misc private frp media_data dtbo vbmeta; do
     echo "$available" | grep -qx "$p" && PARTS="$PARTS $p"
   done
+fi
+if [ "$WITH_SYSTEM" = 1 ]; then
+  echo "$available" | grep -qx system || die "--with-system: no 'system' partition in $BYNAME"
+  echo " $PARTS " | grep -q ' system ' || PARTS="$PARTS system"
 fi
 [ -n "$PARTS" ] || { info "Skipped: none of the boot-chain partitions were found in $BYNAME."; exit 0; }
 
