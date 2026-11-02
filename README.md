@@ -35,10 +35,12 @@ automatically (it's linked from `.claude/skills/`). It:
    helps you remove it before going further,
 4. records the frame's original state (so it can be put back exactly),
 5. offers a backup of the boot partitions (rooted frames; your choice),
-6. builds VideoLoop and makes it the home screen, the right way for that Android
+6. asks whether to keep adb on over Wi-Fi (port 5555) so the frame can be managed
+   without a cable, and turns it on if you say yes,
+7. builds VideoLoop and makes it the home screen, the right way for that Android
    version and root situation,
-7. asks what to call the frame (you'll likely have several, and their IPs change),
-8. loads a test video, verifies the loop across a reboot, and confirms it can be reverted.
+8. asks what to call the frame (you'll likely have several, and their IPs change),
+9. loads a test video, verifies the loop across a reboot, and confirms it can be reverted.
 
 It stops for your OK before changing anything on the frame, installing software on
 the Mac, rebooting, or reverting. It also upgrades and reverts frames later. Other

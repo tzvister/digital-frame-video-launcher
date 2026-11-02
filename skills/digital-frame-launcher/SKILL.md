@@ -108,7 +108,7 @@ Root held by: <root_shells_held_by or "nothing">   Open ports: <listening or "no
   if they say so.
 
 If the frame was offline, `outbound` couldn't be checked. Once it's on Wi-Fi (an
-isolated one if an agent was found), rerun the scan after step 9's reboot.
+isolated one if an agent was found), rerun the scan after step 10's reboot.
 
 ### 4. Snapshot the original state
 `scripts/snapshot.sh -s <serial>` records the original home screen and the settings
@@ -127,24 +127,30 @@ takes hours over these frames' Wi-Fi). If step 3 found an agent to remove, say t
 backup with `--with-system` (over USB, about 1 GB, a few minutes) is the only way
 back if a write to `/system` goes wrong, and let the user decide.
 
-### 6. Build the app
+### 6. Network adb (before the install)
+Decide this before the launcher goes on, so the reboot test in step 10 can run over
+Wi-Fi and the frame stays manageable without a cable. If the survey shows
+`adb_tcp_persist` empty, the frame stops answering adb over the network after its next
+reboot. Ask the user: `scripts/network_adb.sh -s <serial>` turns adb on at port 5555
+now and keeps it on after reboots (that part needs root; without root it lasts until
+the next reboot). It lets them, and Claude, manage the frame over Wi-Fi later, but
+leaves a debug port open on their network, root-capable on rooted frames. If the
+security check found an agent, shows `adb_auth=off`, or the network is shared,
+recommend against it, or an isolated network first. It prints
+`network_adb_now`, `network_adb_after_reboot` and whether `adb connect <ip>:5555`
+worked. Off again: `network_adb.sh --off`, or `revert.sh --restore-adb` as part of a
+revert. If they decline, the step-10 reboot test can't be checked over the network;
+use USB, or ask them to confirm the video came back.
+
+### 7. Build the app
 `scripts/get_app.sh` clones/updates the repo, builds, and prints the APK path. If it
 says the toolchain is missing, ask the user, run `<repo>/tools/setup-toolchain.sh`,
 then rerun.
 
-### 7. Install and take over the home screen
+### 8. Install and take over the home screen
 `scripts/install_app.sh -s <serial> <apk>` installs, grants storage access, writes the
 revert record on the frame first, then switches the home screen with the method above.
 If it prints `ACTION NEEDED`, tell the user exactly what to tap on the frame.
-
-**Network ADB after reboots.** If the survey shows `adb_tcp_persist` empty and you're
-connected over the network, the frame will stop answering adb after its next reboot.
-Ask the user before deciding: keeping it on (`--keep-network-adb`, needs root) lets
-them — and Claude — manage the frame over Wi-Fi later, but leaves a debug port open on
-their network, root-capable on rooted frames. If the security check found an agent,
-or shows `adb_auth=off`, recommend against it. If they decline, the step-9 reboot test
-can't be checked over the network; ask them to confirm the video came back instead.
-`revert.sh --restore-adb` undoes the setting.
 
 If it stops because the installed VideoLoop **was signed with a different key** (built
 on another Mac, or the key was lost), that's normal and harmless. Explain it, and with
@@ -159,26 +165,26 @@ don't mind) and run `scripts/set_name.sh -s <serial> "<name>"`. The name shows i
 VideoLoop's menu title and *Network info*, in `find_frames.sh`, and in the survey.
 Rename any time by running it again.
 
-### 8. Load the test video
+### 9. Load the test video
 `scripts/set_video.sh -s <serial> assets/test-video.mp4 --name loop.mp4` copies the
 bundled 4-second 1280×800 test pattern into `<storage>/VideoLoop/` and tells VideoLoop
 to play it. If the user wants their own video instead, use that path. If a different file of
 the same name exists, the script stops — ask before using `--overwrite`.
 
-### 9. Verify, reboot, verify again
+### 10. Verify, reboot, verify again
 `scripts/verify.sh -s <serial>` checks: VideoLoop is the home screen, in front, the
 screen is on, and the video loops (≥ 2 play/loop events in 20 s; pass `--seconds` for
 longer clips). Then, with the user's OK, `adb -s <serial> reboot`. After about a
 minute, **find the frame again** — its IP may change on reboot — and run `verify.sh`
 on the new serial. Booting straight into the loop is the real test.
 
-### 10. Confirm the way back
+### 11. Confirm the way back
 `scripts/revert.sh -s <serial> --check` is read-only: it confirms the install record
 exists on the frame, the original home app is still installed, and root is there if
 the method needs it. Don't finish without an OK here — "can be reverted" is part of
 the deliverable.
 
-### 11. Hand off
+### 12. Hand off
 Tell the user, briefly:
 - The frame's name, and that it now boots into the looping video; which video is playing.
 - Hidden menu: two-finger press-and-hold ~1.5 s → choose video, import from memory
@@ -223,7 +229,7 @@ card insert). For version- or vendor-specific differences, **references/compatib
 
 ## Files
 - `scripts/` — `lib.sh` (shared), `find_frames.sh`, `survey.sh`, `security_scan.sh`, `snapshot.sh`,
-  `backup.sh`, `get_app.sh`, `install_app.sh`, `set_name.sh`, `set_video.sh`,
+  `backup.sh`, `network_adb.sh`, `get_app.sh`, `install_app.sh`, `set_name.sh`, `set_video.sh`,
   `verify.sh`, `revert.sh`
 - `assets/test-video.mp4` — 4 s generated test pattern (ffmpeg `testsrc2`), 1280×800,
   H.264 High, no audio

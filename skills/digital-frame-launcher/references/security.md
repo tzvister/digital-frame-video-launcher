@@ -17,8 +17,8 @@ network adb, or because the user keeps Frameo), deal with what the scan found fi
 | `updaters_enabled` | Vendor over-the-air updaters (Adups FOTA, Rockchip update service, ...). They can install firmware without asking, and an update can quietly bring a removed agent back. |
 | `resolv_conf_dns` | DNS servers written into `/system/etc/resolv.conf`. Public ones (8.8.8.8, 1.1.1.1, OpenDNS) mean the frame ignores the router's DNS, so blocking a domain on the router does nothing. Only a firewall rule works. |
 | `root_shells_held_by` | Apps keeping `su` root shells open. On Frameo frames this is usually `net.frameo.frame`, which is expected if the user keeps Frameo. Once VideoLoop is the home screen, Frameo usually stops running and these (and its open port) go away: rescan to confirm. |
-| `listening` | TCP ports open beyond localhost, with the uid that owns each. uid 0 is root, uid 1000 is system, 10000 and up is an app: `dumpsys package <pkg> \| grep userId` says which one. |
-| `outbound` | Live connections to internet addresses. Any from uid 0 → **risk**. Empty while `online=no`, so rerun once the frame is on an isolated network. |
+| `listening` | TCP ports open beyond localhost, with who owns each: `root`, `system`, `adb` (network adb, see `adb_network_port`), or a uid; 10000 and up is an app: `dumpsys package <pkg> \| grep userId` says which one. |
+| `outbound` | Live connections to internet addresses. Any from `root` → **risk**. Empty while `online=no`, so rerun once the frame is on an isolated network. |
 | `adb_auth`, `adb_network_port` | adb listening on the network with key checks off means anyone on the LAN can get root on the frame. |
 | `clock_days_behind` | These frames often have no clock battery and boot in the past, so HTTPS fails until they get network time. Harmless for VideoLoop. |
 
@@ -103,7 +103,7 @@ compared with about 0.1 MB/s over these frames' Wi-Fi). The commands below are f
 
 ## Network adb and VideoLoop
 
-`install_app.sh --keep-network-adb` leaves adb open on the user's Wi-Fi. If the scan
+`scripts/network_adb.sh` (SKILL.md step 6) leaves adb open on the user's Wi-Fi. If the scan
 shows `adb_auth=off`, or the frame is on a shared network, recommend against it: on a
 rooted frame it hands root to anyone on the LAN. Managing the frame over USB works too.
 

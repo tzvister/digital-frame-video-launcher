@@ -32,7 +32,7 @@ client list, or (once VideoLoop runs) its hidden menu → *Network info*.
   when the cable is plugged in = no data connection.
 - Once on USB, `adb tcpip 5555` switches the frame to network adb until the next
   reboot. Keeping it on across reboots needs root and the owner's OK
-  (`install_app.sh --keep-network-adb`; see SKILL.md step 7 for the trade-off).
+  (`scripts/network_adb.sh`; see SKILL.md step 6 for the trade-off).
 
 ## 3. "Allow USB debugging?" (unauthorized)
 

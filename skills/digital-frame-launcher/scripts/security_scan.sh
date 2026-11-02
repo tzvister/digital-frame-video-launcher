@@ -88,6 +88,7 @@ kv root_shells_held_by "$holders"
 [ -n "$holders" ] && flag_review "these apps keep root shells open: $holders"
 
 # ---- sockets: who listens beyond localhost, and who is talking out ----
+uid_label() { case "$1" in 0) echo root ;; 1000) echo system ;; 2000) echo adb ;; *) echo "uid $1" ;; esac; }
 # /proc/net/tcp rows: local rem state ... uid. State 0A = listen, 01 = established.
 listen=""; conns=""
 for f in /proc/net/tcp /proc/net/tcp6; do
@@ -97,7 +98,7 @@ for f in /proc/net/tcp /proc/net/tcp6; do
     lip="${loc%:*}"; lport=$((16#${loc##*:}))
     case "$st" in
       0A) case "$lip" in 0100007F|*0100007F|00000000000000000000000001000000) ;;  # loopback
-            *) listen="$listen $lport(uid $uid)" ;; esac ;;
+            *) listen="$listen $lport($(uid_label "$uid"))" ;; esac ;;
       01) rip="${rem%:*}"; rport=$((16#${rem##*:}))
           if [ ${#rip} -eq 8 ]; then
             ip="$((16#${rip:6:2})).$((16#${rip:4:2})).$((16#${rip:2:2})).$((16#${rip:0:2}))"
@@ -105,7 +106,7 @@ for f in /proc/net/tcp /proc/net/tcp6; do
             v4="${rip:24:8}"; ip="$((16#${v4:6:2})).$((16#${v4:4:2})).$((16#${v4:2:2})).$((16#${v4:0:2}))"
           else ip="ipv6"; fi
           case "$ip" in 127.*|10.*|192.168.*|172.1[6-9].*|172.2[0-9].*|172.3[01].*) ;;  # local
-            *) conns="$conns $ip:$rport(uid $uid)" ;; esac ;;
+            *) conns="$conns $ip:$rport($(uid_label "$uid"))" ;; esac ;;
     esac
   done <<EOF
 $rows
@@ -113,10 +114,11 @@ EOF
 done
 kv listening "${listen# }"
 kv outbound "${conns# }"
-case "$conns" in *"(uid 0)"*) flag_risk "a root process (uid 0) has a live connection to the internet: find it before going on" ;; esac
+case "$conns" in *"(root)"*) flag_risk "a root process (uid 0) has a live connection to the internet: find it before going on" ;; esac
 [ -n "$adb_tcp" ] && [ "$(prop ro.adb.secure)" != 1 ] && \
   flag_review "adb is open on the network (port $adb_tcp) without key checks: anyone on the LAN can take root"
-[ -n "$listen" ] && flag_review "listening on the network:$listen (uid 10000+ is an app; 'dumpsys package <pkg> | grep userId' maps them)"
+others="$(echo "$listen" | tr ' ' '\n' | grep -v "^$adb_tcp(adb)\$" | tr '\n' ' ' | sed 's/^ *//; s/ *$//')"
+[ -n "$others" ] && flag_review "listening on the network: $others (uid 10000+ is an app; 'dumpsys package <pkg> | grep userId' maps them)"
 
 # ---- online? and the clock ----
 wifi="$(sh_ ls /sys/class/net | tr -s ' \t' '\n\n' | grep -E '^(wlan|wlp|eth)' | head -1)"
