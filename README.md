@@ -58,7 +58,10 @@ Per-frame records (original state, name, backups) go to `frames/<frame-id>/`
   - *Screen rotation…* — **Auto** (default) follows how the frame is standing, so a
     portrait video fills the screen when the frame stands on its side. Also fixed
     landscape/portrait (and upside-down) for wall mounting.
-  - *Network info* shows the frame's name, IP, MAC and the `adb connect` line.
+  - *Brightness…* — a slider that sets the backlight directly (some frames' stock
+    Settings app crashes on its own brightness slider; this avoids it).
+  - *Screen & network info* shows the panel's **native resolution** (the size to make
+    your video), the frame's name, IP, MAC and the `adb connect` line.
   - *Open Android Settings* (Wi-Fi etc.), *Restore original home screen on next
     reboot*, *Switch to original home screen now*, *Reboot now*. Restoring uses the
     record the installer left in `<storage>/.videoloop/state`, and VideoLoop only

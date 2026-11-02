@@ -23,6 +23,7 @@ import android.os.Environment;
 import android.os.Handler;
 import android.os.SystemClock;
 import android.provider.Settings;
+import android.util.DisplayMetrics;
 import android.util.Log;
 import android.graphics.Color;
 import android.view.Gravity;
@@ -30,6 +31,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
+import android.widget.SeekBar;
 import android.widget.Toast;
 import android.widget.VideoView;
 
@@ -213,7 +215,7 @@ public class MainActivity extends Activity {
         if (intent == null || intent.getAction() == null) return;
         String a = intent.getAction();
         if (ACTION_SHOW_MENU.equals(a)) showAdminMenu();
-        else if (ACTION_SHOW_NETWORK.equals(a)) showNetworkInfo();
+        else if (ACTION_SHOW_NETWORK.equals(a)) showScreenInfo();
         else if (ACTION_SHOW_IMPORT.equals(a)) offerImport(null);
         else if (ACTION_SET_ROTATION.equals(a)) setRotation(intent.getIntExtra("mode", 0));
         else if (ACTION_PLAY.equals(a)) {
@@ -359,7 +361,8 @@ public class MainActivity extends Activity {
             "Choose video…",
             "Import videos from memory card…",
             "Screen rotation…",
-            "Network info (IP / MAC)",
+            "Brightness…",
+            "Screen & network info",
             "Open Android Settings (Wi-Fi, etc.)",
             "Restore original home screen on next reboot",
             "Switch to original home screen now",
@@ -374,11 +377,12 @@ public class MainActivity extends Activity {
                         case 0: chooseVideo();         break;
                         case 1: offerImport(null);     break;
                         case 2: chooseRotation();      break;
-                        case 3: showNetworkInfo();     break;
-                        case 4: openSettings();        break;
-                        case 5: revertNextBoot(false); break;
-                        case 6: revertNextBoot(true);  break;
-                        case 7: rebootNow();           break;
+                        case 3: chooseBrightness();    break;
+                        case 4: showScreenInfo();      break;
+                        case 5: openSettings();        break;
+                        case 6: revertNextBoot(false); break;
+                        case 7: revertNextBoot(true);  break;
+                        case 8: rebootNow();           break;
                         default: /* cancel */          break;
                     }
                 }
@@ -431,15 +435,31 @@ public class MainActivity extends Activity {
         return n.length() == 0 ? null : n;
     }
 
-    private void showNetworkInfo() {
+    /** The panel's native pixel size, largest dimension first (e.g. "1280 × 800"). */
+    private String nativeResolution() {
+        try {
+            DisplayMetrics dm = new DisplayMetrics();
+            getWindowManager().getDefaultDisplay().getRealMetrics(dm);
+            int hi = Math.max(dm.widthPixels, dm.heightPixels);
+            int lo = Math.min(dm.widthPixels, dm.heightPixels);
+            return hi + " × " + lo;
+        } catch (Exception e) {
+            return "unknown";
+        }
+    }
+
+    private void showScreenInfo() {
         String ip = ipAddress();
         String mac = macAddress();
         String name = frameName();
+        String res = nativeResolution();
         menuOpen = true;
         new AlertDialog.Builder(this)
-            .setTitle("Network info")
+            .setTitle("Screen & network info")
             .setMessage((name != null ? "Frame:\n" + name + "\n\n" : "")
-                        + "IP address:\n" + (ip != null ? ip : "unknown (not connected?)")
+                        + "Screen size (native):\n" + res + " px"
+                        + "\nUse a video this size (H.264 .mp4) for the sharpest fit."
+                        + "\n\nIP address:\n" + (ip != null ? ip : "unknown (not connected?)")
                         + "\n\nMAC address:\n" + mac
                         + "\n(some frames pick a new MAC on every reboot,"
                         + " so the IP can change after a reboot)"
@@ -447,6 +467,57 @@ public class MainActivity extends Activity {
             .setPositiveButton("OK", null)
             .setOnDismissListener(menuDismissed)
             .show();
+    }
+
+    // ---------------- brightness ----------------
+    // The frame's stock Settings app crashes on its brightness slider on some
+    // units, so VideoLoop sets it directly: live on this window, and persisted
+    // system-wide (via Settings.System, falling back to root where that needs
+    // the WRITE_SETTINGS permission the frame won't grant).
+
+    private void chooseBrightness() {
+        menuOpen = true;
+        final SeekBar bar = new SeekBar(this);
+        bar.setMax(255);
+        int cur = 160;
+        try { cur = Settings.System.getInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS); }
+        catch (Exception e) { /* keep default */ }
+        bar.setProgress(cur);
+        int pad = (int) (24 * getResources().getDisplayMetrics().density);
+        bar.setPadding(pad, pad, pad, pad);
+        bar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar sb, int v, boolean fromUser) {
+                if (fromUser) applyBrightness(Math.max(8, v));   // never fully dark
+            }
+            @Override public void onStartTrackingTouch(SeekBar sb) { }
+            @Override public void onStopTrackingTouch(SeekBar sb) { }
+        });
+        new AlertDialog.Builder(this)
+            .setTitle("Brightness")
+            .setView(bar)
+            .setPositiveButton("OK", null)
+            .setOnDismissListener(menuDismissed)
+            .show();
+    }
+
+    private void applyBrightness(int b) {
+        // Immediate feedback on this window (works without any permission).
+        try {
+            WindowManager.LayoutParams lp = getWindow().getAttributes();
+            lp.screenBrightness = b / 255f;
+            getWindow().setAttributes(lp);
+        } catch (Exception e) { /* ignore */ }
+        // Persist system-wide so it survives / affects the whole frame.
+        boolean ok = false;
+        try {
+            Settings.System.putInt(getContentResolver(),
+                Settings.System.SCREEN_BRIGHTNESS_MODE, 0);      // manual
+            Settings.System.putInt(getContentResolver(),
+                Settings.System.SCREEN_BRIGHTNESS, b);
+            ok = true;
+        } catch (Exception e) { ok = false; }
+        if (!ok) runSu("settings put system screen_brightness_mode 0 ; "
+                       + "settings put system screen_brightness " + b);
     }
 
     /** IPv4 of the active interface, or null. */

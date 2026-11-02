@@ -68,6 +68,10 @@ if [ "${S:-0}" -ge 23 ]; then
     sh_ "pm grant $APP_PKG android.permission.$perm" >/dev/null
   done
 fi
+# WRITE_SETTINGS (the in-app Brightness control) is an appop, not a pm-grant
+# permission, so grant it via root. Without it the app still dims this window
+# live and falls back to root to persist, but this makes it stick cleanly.
+[ "$ROOT_MODE" != none ] && as_root "appops set $APP_PKG WRITE_SETTINGS allow" >/dev/null 2>&1
 
 # 3. Pick how to take over the home screen (an earlier install's method wins).
 prev="$(sh_ cat "$P/$DEVICE_DIR/state" | sed -n 's/^method=//p')"
