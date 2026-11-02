@@ -7,6 +7,11 @@ Stale network transport or dozing Wi-Fi. `adb disconnect <ip>:5555`, then connec
 again (the scripts do this). Pings of up to ~1 s mean the frame's Wi-Fi is dozing or
 the signal is weak — moving the frame (e.g. standing it in portrait somewhere else)
 can do that. If it persists, ask the user to reboot the frame from VideoLoop's menu.
+If `ping <ip>` and `nc -z <ip> 5555` both succeed but `adb connect` still says "No route
+to host", the Mac's adb server is the problem (on macOS, the long-running server can
+lose Local Network access, e.g. after it was started from a different app):
+`adb kill-server`, then connect again. That drops every adb connection on the Mac, so
+check `adb devices` for anything else in use first.
 
 **Frame not found after a reboot.** Its IP probably changed (random MAC, see
 compatibility.md). Rerun `find_frames.sh`; VideoLoop's menu → *Network info* shows the IP.
