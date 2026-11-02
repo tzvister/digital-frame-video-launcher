@@ -2,6 +2,7 @@
 # List Android devices reachable over adb: USB devices plus a LAN scan for adb on port 5555.
 #   scripts/find_frames.sh                         scan the Mac's own networks
 #   FRAME_NETS="192.168.1.0/24" scripts/find_frames.sh
+#   FRAME_NETS=none scripts/find_frames.sh        USB only, no network sweep
 # One line per device:  SERIAL | maker model | Android (API) | device/platform | VideoLoop
 # Read-only. Frames on dozing Wi-Fi can take ~1 s to answer, so each host gets 3 s.
 . "$(dirname "$0")/lib.sh"
@@ -19,6 +20,7 @@ mask_bits() {   # 0xfffffc00 or 255.255.252.0 -> 22
 # VMs, ...) and the CGNAT range VPNs use are skipped: frames sit on the home LAN, and
 # sweeping a VPN could reach devices that aren't the user's.
 networks() {
+  [ "$FRAME_NETS" = none ] && return
   if [ -n "$FRAME_NETS" ]; then echo "$FRAME_NETS" | tr ' ,' '\n\n'; return; fi
   {
     if command -v ifconfig >/dev/null 2>&1; then
@@ -90,7 +92,7 @@ command -v adb >/dev/null || die "adb not found. Install it: brew install androi
 
 usb="$(adb devices | tr -d '\r' | awk 'NR > 1 && $1 != "" && $1 !~ /:/ {print $1}')"
 nets="$(networks)"
-info "Scanning for adb (port 5555) on: $(echo $nets) ..."
+[ -n "$nets" ] && info "Scanning for adb (port 5555) on: $(echo $nets) ..."
 hits="$(for n in $nets; do scan_net "$n"; done | sort -u)"
 
 found=0

@@ -16,7 +16,7 @@ network adb, or because the user keeps Frameo), deal with what the scan found fi
 | `agent_<name>` | `running(pid N)` or `installed`: a known hidden agent is on the frame → **risk**. `neutralized`: its launcher script is there but the program is gone (as left by the fix below). `absent`: not found. |
 | `updaters_enabled` | Vendor over-the-air updaters (Adups FOTA, Rockchip update service, ...). They can install firmware without asking, and an update can quietly bring a removed agent back. |
 | `resolv_conf_dns` | DNS servers written into `/system/etc/resolv.conf`. Public ones (8.8.8.8, 1.1.1.1, OpenDNS) mean the frame ignores the router's DNS, so blocking a domain on the router does nothing. Only a firewall rule works. |
-| `root_shells_held_by` | Apps keeping `su` root shells open. On Frameo frames this is usually `net.frameo.frame`, which is expected if the user keeps Frameo. |
+| `root_shells_held_by` | Apps keeping `su` root shells open. On Frameo frames this is usually `net.frameo.frame`, which is expected if the user keeps Frameo. Once VideoLoop is the home screen, Frameo usually stops running and these (and its open port) go away: rescan to confirm. |
 | `listening` | TCP ports open beyond localhost, with the uid that owns each. uid 0 is root, uid 1000 is system, 10000 and up is an app: `dumpsys package <pkg> \| grep userId` says which one. |
 | `outbound` | Live connections to internet addresses. Any from uid 0 → **risk**. Empty while `online=no`, so rerun once the frame is on an isolated network. |
 | `adb_auth`, `adb_network_port` | adb listening on the network with key checks off means anyone on the LAN can get root on the frame. |
