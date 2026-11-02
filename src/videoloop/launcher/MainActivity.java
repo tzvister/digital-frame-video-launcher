@@ -75,6 +75,8 @@ public class MainActivity extends Activity {
     private static final String PREFS = "videoloop";
     private static final String KEY_VIDEO = "video_path";
     private static final String KEY_ROTATION = "rotation";
+    private static final String KEY_BRIGHTNESS = "brightness";   // 0-255; default max
+    private static final int BRIGHTNESS_MAX = 255;
 
     private static final int CLASH_OVERWRITE = 0;
     private static final int CLASH_KEEP_BOTH = 1;
@@ -176,6 +178,7 @@ public class MainActivity extends Activity {
         });
 
         applyRotation();
+        applyBrightness(savedBrightness());   // default max; slider overrides and is remembered
 
         IntentFilter cardFilter = new IntentFilter(Intent.ACTION_MEDIA_MOUNTED);
         cardFilter.addDataScheme("file");
@@ -478,16 +481,13 @@ public class MainActivity extends Activity {
     private void chooseBrightness() {
         menuOpen = true;
         final SeekBar bar = new SeekBar(this);
-        bar.setMax(255);
-        int cur = 160;
-        try { cur = Settings.System.getInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS); }
-        catch (Exception e) { /* keep default */ }
-        bar.setProgress(cur);
+        bar.setMax(BRIGHTNESS_MAX);
+        bar.setProgress(savedBrightness());
         int pad = (int) (24 * getResources().getDisplayMetrics().density);
         bar.setPadding(pad, pad, pad, pad);
         bar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override public void onProgressChanged(SeekBar sb, int v, boolean fromUser) {
-                if (fromUser) applyBrightness(Math.max(8, v));   // never fully dark
+                if (fromUser) setBrightness(Math.max(8, v));     // never fully dark; remembered
             }
             @Override public void onStartTrackingTouch(SeekBar sb) { }
             @Override public void onStopTrackingTouch(SeekBar sb) { }
@@ -498,6 +498,18 @@ public class MainActivity extends Activity {
             .setPositiveButton("OK", null)
             .setOnDismissListener(menuDismissed)
             .show();
+    }
+
+    /** Remembered brightness, defaulting to max so a fresh frame comes up bright. */
+    private int savedBrightness() {
+        int b = getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt(KEY_BRIGHTNESS, BRIGHTNESS_MAX);
+        return (b < 8) ? 8 : (b > BRIGHTNESS_MAX ? BRIGHTNESS_MAX : b);
+    }
+
+    /** Remember the user's choice, then apply it. */
+    private void setBrightness(int b) {
+        getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putInt(KEY_BRIGHTNESS, b).apply();
+        applyBrightness(b);
     }
 
     private void applyBrightness(int b) {
