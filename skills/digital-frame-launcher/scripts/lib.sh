@@ -143,3 +143,17 @@ kv_get() { sed -n "s/^$2=//p" "$1" 2>/dev/null | tail -1; }
 local_md5() { if command -v md5 >/dev/null; then md5 -q "$1"; else md5sum "$1" | awk '{print $1}'; fi; }
 dev_md5()   { sh_ "md5sum '$1'" | awk '{print $1}' | grep -E '^[0-9a-f]{32}$'; }
 local_size() { wc -c < "$1" | tr -d ' '; }
+
+# Vendor firmware/Android updaters (Adups FOTA, Rockchip RKUpdateService, ...). Frameo's
+# own "Android update" screen hands off to these, and an update can quietly undo our
+# changes or bring back a removed agent. Package-name fragments:
+UPDATER_RE='fota|adups|rockchip\.update|\.ota$|\.ota\.|otaupdate|systemupdate|update\.service|upgrade'
+# Prints "<pkg> enabled|disabled" per installed updater.
+updater_packages() {
+  local all off p
+  all="$(sh_ pm list packages | sed 's/^package://')"
+  off="$(sh_ pm list packages -d | sed 's/^package://')"
+  for p in $(echo "$all" | grep -iE "$UPDATER_RE"); do
+    if echo "$off" | grep -qx "$p"; then echo "$p disabled"; else echo "$p enabled"; fi
+  done
+}

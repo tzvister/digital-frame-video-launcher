@@ -31,8 +31,8 @@ automatically (it's linked from `.claude/skills/`). It:
 1. finds the frame on the network or USB,
 2. surveys compatibility and shows you a plain-language report,
 3. checks the frame's security: hidden root agents that phone home (like `iotv`),
-   vendor firmware updaters, hard-coded DNS and open ports. If it finds an agent, it
-   helps you remove it before going further,
+   Android/firmware updates (including the ones Frameo can trigger), hard-coded DNS
+   and open ports. It turns updates off and helps remove an agent before going further,
 4. records the frame's original state (so it can be put back exactly),
 5. offers a backup of the boot partitions (rooted frames; your choice),
 6. asks whether to keep adb on over Wi-Fi (port 5555) so the frame can be managed
@@ -43,7 +43,9 @@ automatically (it's linked from `.claude/skills/`). It:
 9. loads a test video, verifies the loop across a reboot, and confirms it can be reverted.
 
 It stops for your OK before changing anything on the frame, installing software on
-the Mac, rebooting, or reverting. It also upgrades and reverts frames later. Other
+the Mac, rebooting, or reverting. It also reverts frames later, and brings frames
+set up by an older version of the skill up to date: `scripts/checklist.sh --list`
+shows which frames are behind the current checklist. Other
 agents (Codex, Cursor, ...) are pointed to the same procedure by [AGENTS.md](AGENTS.md).
 Without an agent, follow [SKILL.md](skills/digital-frame-launcher/SKILL.md) by hand;
 every step is a script in `skills/digital-frame-launcher/scripts/`.

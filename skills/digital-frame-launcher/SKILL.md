@@ -1,6 +1,6 @@
 ---
 name: digital-frame-launcher
-description: Turn an Android digital photo frame (Frameo or similar) into a full-screen looping video player by installing the VideoLoop launcher over ADB, and later upgrade, verify or revert it. Finds the frame on the network or USB, checks compatibility (Android version, root, screen, memory-card/USB paths, Wi-Fi), checks its security (hidden root agents such as iotv, vendor firmware updaters, hard-coded DNS, open ports) and helps neutralize what it finds, records and backs up the original state, builds and installs the app, makes it the home screen, loads a test video, verifies the endless loop, and can put the frame back on its original home screen exactly. Use this whenever the user wants to set up, onboard, convert, hack or "take over" a digital photo frame or similar small Android display, connect to a frame with adb, install or update VideoLoop, check whether a frame is safe or phoning home, remove iotv, or restore a frame's original launcher — even if they don't mention VideoLoop, ADB or launchers by name.
+description: Turn an Android digital photo frame (Frameo or similar) into a full-screen looping video player by installing the VideoLoop launcher over ADB, and later upgrade, verify or revert it. Finds the frame on the network or USB, checks compatibility (Android version, root, screen, memory-card/USB paths, Wi-Fi), checks its security (hidden root agents such as iotv, Android/firmware updates including those triggered from Frameo, hard-coded DNS, open ports) and helps neutralize what it finds, records and backs up the original state, builds and installs the app, makes it the home screen, loads a test video, verifies the endless loop, and can put the frame back on its original home screen exactly. Use this whenever the user wants to set up, onboard, convert, hack or "take over" a digital photo frame or similar small Android display, connect to a frame with adb, install or update VideoLoop, check whether a frame is safe or phoning home, remove iotv, turn off Android updates, bring a frame set up earlier (Frame1, Frame2, ...) up to date with the current checklist, or restore a frame's original launcher — even if they don't mention VideoLoop, ADB or launchers by name.
 ---
 
 # Digital frame launcher (VideoLoop)
@@ -81,7 +81,7 @@ Verdict: <ok/warn/block> — <notes in plain words>
 How VideoLoop will take over (from **references/compatibility.md**): Android 7+ →
 *preferred* (no root); older with root → *disable* the original home; older without
 root → *chooser* (the user taps VideoLoop + Always once). If the verdict is `block`,
-stop and explain. If VideoLoop is already installed, switch to **Upgrade** or
+stop and explain. If VideoLoop is already installed, switch to **Bring an existing frame up to date** or
 **Revert** below. Otherwise go on to the security check, and ask the user to
 confirm both reports together before anything changes.
 
@@ -91,13 +91,21 @@ confirm both reports together before anything changes.
 
 ```
 Security: <clean/review/risk> — <notes in plain words>
-Hidden agents: <agent_* states>   Updaters: <updaters_enabled or "none enabled">
+Hidden agents: <agent_* states>   Android updates: <off, or updaters_enabled/running>
 Root held by: <root_shells_held_by or "nothing">   Open ports: <listening or "none">
 ```
 
 - `clean`: say so in one line and continue.
 - `review`: explain each note and what you'd suggest (see **references/security.md**),
   then continue once the user is happy. Nothing here blocks VideoLoop.
+- `risk` because **Android/firmware updates are on** (`updaters_enabled`,
+  `updaters_running`, or an `update_staged` file): Frameo's own "Android update"
+  screen and the vendor service can install firmware without asking, which can replace
+  `/system`, undo this setup or bring back a removed agent. Explain that, and with the
+  user's OK run `scripts/disable_updates.sh -s <serial>` (reversible with `--undo`;
+  it waits until Android has saved the change, so a reboot can't lose it). If an
+  update is staged, don't reboot until it's removed. `frameo_version` shows whether
+  Frameo has updated itself; that's an app update, reported but not blocked.
 - `risk` (a known hidden agent such as `iotv`, or a root process talking to the
   internet): **stop**. Recommend keeping the frame off the user's Wi-Fi, or on an
   isolated guest network, until it's dealt with. Then offer to neutralize it by
@@ -182,7 +190,8 @@ on the new serial. Booting straight into the loop is the real test.
 `scripts/revert.sh -s <serial> --check` is read-only: it confirms the install record
 exists on the frame, the original home app is still installed, and root is there if
 the method needs it. Don't finish without an OK here — "can be reverted" is part of
-the deliverable.
+the deliverable. Then run `scripts/checklist.sh -s <serial>`: every line should be OK
+or INFO, and it records the frame as checked against the current checklist.
 
 ### 12. Hand off
 Tell the user, briefly:
@@ -199,14 +208,29 @@ Tell the user, briefly:
   are (`frames/<frame-id>/security-<date>/`), and anything still open (e.g. hard-coded
   DNS, so isolate it on the router; outbound not yet checked).
 
-## Upgrade an existing frame
-Find the frame, `survey.sh` (shows the installed version and recorded method),
-`security_scan.sh` (a frame set up before this check existed may never have had
-one), `get_app.sh`, then `install_app.sh` — it keeps the method from the first install, so
-revert still undoes the right thing (and needs `--replace`, with OK, if this Mac's
-signing key differs from the one that installed it). Then `verify.sh` and
-`revert.sh --check`. If no snapshot exists on the Mac, `snapshot.sh` recovers it from
-the frame's copy. If the survey shows no `frame_name`, offer to name the frame.
+## Bring an existing frame up to date (checklist)
+Frames set up by an older version of this skill miss whatever was added since (the
+security check, updates off, network adb, a newer VideoLoop). `scripts/checklist.sh`
+compares a frame with what the current skill does:
+
+1. `scripts/checklist.sh --list` (no frame needed) shows every frame on record on this
+   Mac, by name, with the checklist version it was last checked against: `never`,
+   `vN BEHIND`, `vN k TODO` or `vN OK`. Tell the user which frames are behind.
+2. Connect the frame (find it by name with `find_frames.sh`) and run
+   `scripts/checklist.sh -s <serial> --verify`. Each line is OK, TODO with the command
+   that fixes it, or INFO (the user's choice, e.g. network adb).
+3. Present the TODOs in plain words and fix them with the user's OK, in step order:
+   snapshot first if missing, then security (agents, `disable_updates.sh`), then
+   network adb if they want it, then `get_app.sh` + `install_app.sh` for a newer
+   VideoLoop. `install_app.sh` keeps the method from the first install, so revert still
+   undoes the right thing; it needs `--replace`, with OK, if this Mac's signing key
+   differs from the one that installed it.
+4. Rerun `checklist.sh -s <serial> --verify` until there are no TODOs. That saves the
+   result in `frames/<frame-id>/checklist.txt`, so `--list` shows the frame as current.
+
+**Keeping the checklist current:** whenever this skill gains a step or a check, add an
+item to `scripts/checklist.sh` and bump its `CHECKLIST_VERSION` (with a line in its
+header saying what that version added). Older frames then show as BEHIND.
 
 ## Revert a frame
 Confirm with the user first, and explain the options:
@@ -229,7 +253,7 @@ card insert). For version- or vendor-specific differences, **references/compatib
 
 ## Files
 - `scripts/` — `lib.sh` (shared), `find_frames.sh`, `survey.sh`, `security_scan.sh`, `snapshot.sh`,
-  `backup.sh`, `network_adb.sh`, `get_app.sh`, `install_app.sh`, `set_name.sh`, `set_video.sh`,
+  `backup.sh`, `disable_updates.sh`, `network_adb.sh`, `checklist.sh`, `get_app.sh`, `install_app.sh`, `set_name.sh`, `set_video.sh`,
   `verify.sh`, `revert.sh`
 - `assets/test-video.mp4` — 4 s generated test pattern (ffmpeg `testsrc2`), 1280×800,
   H.264 High, no audio

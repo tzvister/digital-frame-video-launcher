@@ -25,6 +25,12 @@
       "prompt": "Before you put the video thing on my frame, is it safe? I read some of these frames phone home.",
       "expected_output": "Read-only: find_frames + survey + security_scan.sh; plain-language report of hidden agents (e.g. iotv), enabled vendor updaters, hard-coded DNS, apps holding root and open ports; if an agent is found, recommends keeping the frame off the user's Wi-Fi and offers the references/security.md procedure (snapshot, an optional backup.sh --with-system if the user wants one, neutralize, disable updaters, rescan) but changes nothing without an explicit OK.",
       "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "Frame1 was set up a while ago with an older version of this. Bring it up to date with whatever the skill does now.",
+      "expected_output": "checklist.sh --list shows Frame1 as never/BEHIND; the frame is found by name and checklist.sh -s <serial> --verify lists OK/TODO/INFO; each TODO is explained and fixed only with the user's OK, in step order (snapshot, security incl. disable_updates.sh, network adb if wanted, newer VideoLoop via get_app.sh + install_app.sh); rerun ends with todo=0 and --list shows the frame as current.",
+      "files": []
     }
   ]
 }

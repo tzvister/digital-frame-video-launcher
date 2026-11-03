@@ -13,8 +13,6 @@ kv() { printf '%s=%s\n' "$1" "$2"; }
 # Known hidden agents: "<name> <binary> <launcher script>". Add new ones here and
 # in references/security.md.
 AGENTS="iotv /system/bin/iotv /system/bin/run_iotv.sh"
-# Package-name fragments of vendor over-the-air updaters (they can reinstall an agent).
-UPDATER_RE='fota|adups|rockchip\.update|\.ota$|\.ota\.|otaupdate|systemupdate|update\.service|upgrade'
 PUBLIC_DNS_RE='^(8\.8\.[48]\.[48]|1\.[01]\.[01]\.1|9\.9\.9\.9|208\.67\.22[02]\.22[02]|114\.114\.1[14]4\.1[14]4|223\.5\.5\.5|180\.76\.76\.76)$'
 
 R="$(root_mode)"
@@ -56,18 +54,32 @@ while [ $# -ge 3 ]; do
   esac
 done
 
-# ---- vendor updaters ----
-all_pkgs="$(sh_ pm list packages | sed 's/^package://')"
-off_pkgs="$(sh_ pm list packages -d | sed 's/^package://')"
-upd_on=""; upd_off=""
-for p in $(echo "$all_pkgs" | grep -iE "$UPDATER_RE"); do
-  if echo "$off_pkgs" | grep -qx "$p"; then upd_off="$upd_off $p"; else upd_on="$upd_on $p"; fi
+# ---- Android/firmware updates (vendor updaters, which Frameo's update screen uses) ----
+# Any updater that is enabled or running is a risk: an update can replace /system,
+# undo what this skill changed, or bring back a removed agent. scripts/disable_updates.sh
+upd="$(updater_packages)"
+upd_on="$(echo "$upd" | awk '$2=="enabled"{print $1}' | tr '\n' ' ' | sed 's/ $//')"
+upd_off="$(echo "$upd" | awk '$2=="disabled"{print $1}' | tr '\n' ' ' | sed 's/ $//')"
+upd_run=""
+for p in $upd_on $upd_off; do
+  echo "$PS" | awk -v p="$p" '$NF==p || index($NF, p":")==1' | grep -q . && upd_run="$upd_run $p"
 done
-kv updaters_enabled "${upd_on# }"
-kv updaters_disabled "${upd_off# }"
-if [ -n "$upd_on" ]; then
-  if [ -n "$found" ]; then flag_risk "vendor updaters are enabled and could reinstall$found after it is removed"
-  else flag_review "vendor updaters are enabled (they can install new firmware over Wi-Fi without asking)"; fi
+kv updaters_enabled "$upd_on"
+kv updaters_disabled "$upd_off"
+kv updaters_running "${upd_run# }"
+kv ota_host "$(prop ro.product.ota.host)$(prop ro.fota.host)"
+[ -n "$upd_on" ] && flag_risk "Android/firmware updates are on ($upd_on): Frameo's update screen and the vendor service can install firmware without asking; disable them (scripts/disable_updates.sh)"
+[ -n "$upd_run" ] && flag_risk "an updater is running right now:$upd_run"
+staged=""
+[ "$R" != none ] && staged="$(as_root 'ls /cache/update.zip /cache/update.img /cache/recovery/command /data/update.zip /sdcard/update.zip /sdcard/update.img 2>/dev/null' | grep -v -i 'no such' | tr '\n' ' ' | sed 's/ $//')"
+kv update_staged "$staged"
+[ -n "$staged" ] && flag_risk "an update is waiting to be installed at the next reboot ($staged): don't reboot until it's removed"
+
+# ---- Frameo updating itself (root 'pm install -r'): reported, not a risk on its own ----
+fv="$(sh_ dumpsys package net.frameo.frame | grep versionName | sed 's/.*versionName=//')"
+if [ -n "$fv" ]; then
+  now_v="$(echo "$fv" | head -1)"; factory_v="$(echo "$fv" | tail -1)"
+  kv frameo_version "$now_v$([ "$now_v" != "$factory_v" ] && echo " (self-updated from $factory_v)")"
 fi
 
 # ---- DNS ----

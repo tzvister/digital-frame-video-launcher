@@ -14,7 +14,10 @@ network adb, or because the user keeps Frameo), deal with what the scan found fi
 | Key | What it means |
 |---|---|
 | `agent_<name>` | `running(pid N)` or `installed`: a known hidden agent is on the frame → **risk**. `neutralized`: its launcher script is there but the program is gone (as left by the fix below). `absent`: not found. |
-| `updaters_enabled` | Vendor over-the-air updaters (Adups FOTA, Rockchip update service, ...). They can install firmware without asking, and an update can quietly bring a removed agent back. |
+| `updaters_enabled`, `updaters_running` | Vendor over-the-air updaters (Adups FOTA, Rockchip `RKUpdateService`, ...). Frameo's own "Android update" screen hands off to them (its code reads `ro.fota.version`), and the Rockchip one also installs any `update.img` found on an inserted card or USB stick. Any enabled or running → **risk**: an update can replace `/system`, undo this setup or bring a removed agent back. Fix: `scripts/disable_updates.sh` (`--undo` re-enables exactly what it disabled). |
+| `update_staged` | An update file waiting for the next reboot (`/cache/update.zip`, `/cache/recovery/command`, ...) → **risk**. Don't reboot; remove it as root first. |
+| `ota_host` | Where the vendor updater would fetch from (e.g. `www.rockchip.com:2300`). Information only. |
+| `frameo_version` | Frameo updates itself (as root, `pm install -r`), e.g. `v1.32.12 (self-updated from v1.23.11)`. That's an app update, not Android: reported, not blocked. It keeps running in the background after VideoLoop takes over the home screen; only a router firewall rule stops it going online. |
 | `resolv_conf_dns` | DNS servers written into `/system/etc/resolv.conf`. Public ones (8.8.8.8, 1.1.1.1, OpenDNS) mean the frame ignores the router's DNS, so blocking a domain on the router does nothing. Only a firewall rule works. |
 | `root_shells_held_by` | Apps keeping `su` root shells open. On Frameo frames this is usually `net.frameo.frame`, which is expected if the user keeps Frameo. Once VideoLoop is the home screen, Frameo usually stops running and these (and its open port) go away: rescan to confirm. |
 | `listening` | TCP ports open beyond localhost, with who owns each: `root`, `system`, `adb` (network adb, see `adb_network_port`), or a uid; 10000 and up is an app: `dumpsys package <pkg> \| grep userId` says which one. |
@@ -86,10 +89,9 @@ compared with about 0.1 MB/s over these frames' Wi-Fi). The commands below are f
    su -c "mount -o remount,ro /system"
    ```
    Then check that `/proc/mounts` shows `/system` as `ro` again.
-5. **Disable the updaters** listed in `updaters_enabled`: `su -c "pm disable <pkg>"`
-   for each one. Android writes this to disk lazily, and a reboot before that lost the
-   setting on the Runxion. Wait until `/data/system/users/0/package-restrictions.xml`
-   shows `enabled="2"` for each package before rebooting.
+5. **Turn off Android updates:** `scripts/disable_updates.sh -s <serial>`. Android
+   writes package state to disk lazily (a reboot before that lost the setting on the
+   Runxion), so the script waits until `package-restrictions.xml` has it.
 6. **Write `README.md`** in the security folder: what was changed, the hashes, and the
    undo steps below.
 7. **With OK, reboot**, find the frame again, and rerun `security_scan.sh`. You want
@@ -99,7 +101,7 @@ compared with about 0.1 MB/s over these frames' Wi-Fi). The commands below are f
 
 **Undo:** remount `/system` read-write, copy the saved originals back the same way
 (`cat` over the file via `/data/local/tmp`), `chmod 0755` them, remount read-only, run
-`su -c "pm enable <pkg>"` for each updater, and reboot.
+`scripts/disable_updates.sh -s <serial> --undo` if the user wants updates back, and reboot.
 
 ## Network adb and VideoLoop
 

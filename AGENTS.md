@@ -20,6 +20,10 @@ Requirements: macOS (Apple Silicon or Intel) with Homebrew, and a frame that all
 ADB over the network or a USB data cable. Many frames don't out of the box — see
 `skills/digital-frame-launcher/references/adb-access.md` before going further.
 
+When you change the skill (a new step or check), add an item to
+`skills/digital-frame-launcher/scripts/checklist.sh` and bump its `CHECKLIST_VERSION`,
+so frames set up earlier show as behind and can be brought up to date.
+
 Don't:
 - run anything in `devices/` on other frames: those helpers are for one frame model.
 - take screenshots to check playback (it stalls some decoders); use `scripts/verify.sh`.
