@@ -36,7 +36,7 @@ info "Watching playback for ${SECS}s ..."
 sleep "$SECS"
 # One filterspec per tag: a later "VideoLoop:W" would override ":I" and hide the play lines.
 log="$(a logcat -d -s VideoLoop:I 2>/dev/null | tr -d '\r')"
-events="$(echo "$log" | grep -cE 'play /|loop \(native\)')"
+events="$(echo "$log" | grep -cE 'play /|loop \((native|seek)\)')"
 playing="$(echo "$log" | grep -oE 'play /.*' | tail -1 | sed 's/^play //')"
 [ -n "$playing" ] || playing="$(sh_ "cat /data/data/$APP_PKG/shared_prefs/videoloop.xml" | grep -oE '>[^<]+<' | head -1 | tr -d '<>')"
 echo "$log" | grep -q 'no video to play' && check "a video is available to play" no
@@ -45,5 +45,11 @@ if [ "${events:-0}" -ge "$MIN" ]; then
 else
   check "looping: only ${events:-0} play/loop events in ${SECS}s (need $MIN; a clip longer than $((SECS / MIN))s needs a longer --seconds)" no
 fi
+# A full reload ("play /...") while it was already playing flashes black for a moment.
+# VideoLoop 2.6+ only reloads on a stall, so any here is worth a look (not a failure:
+# some decoders may still need it).
+reloads="$(echo "$log" | grep -c 'play /')"
+if [ "${reloads:-0}" = 0 ]; then echo "PASS  no reloads (no black flashes between loops)"
+else echo "WARN  $reloads full reload(s) in ${SECS}s: each shows a brief black frame"; fi
 
 [ "$fail" = 0 ] && echo "RESULT: all checks passed" || { echo "RESULT: some checks failed"; exit 1; }

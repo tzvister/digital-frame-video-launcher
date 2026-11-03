@@ -14,7 +14,8 @@
 #   3 = + VideoLoop 2.4 (way back from Android Settings) and its overlay permission
 #   4 = + original home app (Frameo) switched off or not; VideoLoop 2.5 (its revert
 #       turns a switched-off original app back on)
-CHECKLIST_VERSION=4
+#   5 = + VideoLoop 2.6 (no black flash between loops)
+CHECKLIST_VERSION=5
 . "$(dirname "$0")/lib.sh"
 
 if [ "$1" = --list ]; then

@@ -62,7 +62,9 @@ import java.util.regex.Pattern;
  *
  *  - Plays a local video endlessly, fullscreen, screen kept on. Looping is
  *    driven by a watchdog, because some decoders (e.g. Allwinner CedarX) ignore
- *    MediaPlayer.setLooping and fire onCompletion at most once. The watchdog
+ *    MediaPlayer.setLooping and fire onCompletion at most once. At the end of a
+ *    clip it seeks back to 0 (no black frame); a full reload, which flashes black,
+ *    is only for stalls. Once a decoder is seen looping by itself, it's left alone. The watchdog
  *    keeps running while menus/dialogs are open, so they never stop playback.
  *    Every (re)start is logged under the "VideoLoop" tag so tools can verify it.
  *  - Registered as the HOME launcher (via HomeAlias) so it boots straight in.
@@ -146,6 +148,8 @@ public class MainActivity extends Activity {
     private long prepareStartedAt;
     private int lastPos = -1;
     private int stallTicks;
+    // The decoder wraps by itself (setLooping honoured): leave the end of the clip to it.
+    private boolean nativeLoop;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -171,7 +175,7 @@ public class MainActivity extends Activity {
             }
         });
         video.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
-            @Override public void onCompletion(MediaPlayer mp) { restart(); }
+            @Override public void onCompletion(MediaPlayer mp) { rewind(); }
         });
         video.setOnErrorListener(new MediaPlayer.OnErrorListener() {
             @Override public boolean onError(MediaPlayer mp, int what, int extra) {
@@ -259,7 +263,24 @@ public class MainActivity extends Activity {
         video.start();
     }
 
-    /** Restart playback from scratch (debounced), deferred off any callback. */
+    /**
+     * Back to the start without reloading: seekTo(0) keeps the surface, so no black
+     * frame. If the decoder doesn't resume, the stall check falls back to restart().
+     */
+    private void rewind() {
+        if (preparing) return;
+        try {
+            Log.i(TAG, "loop (seek)");
+            video.seekTo(0);
+            video.start();
+            lastPos = -1;      // the jump back to 0 isn't a native wrap
+            stallTicks = 0;
+        } catch (Exception e) {
+            restart();
+        }
+    }
+
+    /** Restart playback from scratch (debounced), deferred off any callback. Flashes black. */
     private void restart() {
         if (preparing) return;
         preparing = true;
@@ -284,10 +305,12 @@ public class MainActivity extends Activity {
                         int dur = video.getDuration();
                         int pos = video.getCurrentPosition();
                         if (dur > 500 && pos >= dur - 250) {
-                            restart();
+                            // A decoder that loops by itself is about to wrap: don't step on it.
+                            if (!nativeLoop) rewind();
                         } else if (lastPos > 0 && pos + 1000 < lastPos) {
                             // Decoder honoured setLooping and wrapped on its own.
                             Log.i(TAG, "loop (native)");
+                            nativeLoop = true;
                             stallTicks = 0;
                         } else if (pos == lastPos) {
                             if (++stallTicks >= STALL_TICKS) restart();
