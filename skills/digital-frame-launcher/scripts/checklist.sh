@@ -15,7 +15,7 @@ CHECKLIST_VERSION=2
 . "$(dirname "$0")/lib.sh"
 
 if [ "$1" = --list ]; then
-  printf '%-10s %-34s %-8s %-10s %s\n' NAME FRAME_ID SETUP CHECKLIST LAST_CHECKED
+  printf '%-10s %-28s %-11s %-12s %s\n' NAME FRAME_ID SETUP CHECKLIST LAST_CHECKED
   for d in "$FRAMES_DIR"/*/; do
     [ -f "$d/original.env" ] || continue
     id="$(basename "$d")"
@@ -28,8 +28,8 @@ if [ "$1" = --list ]; then
     elif [ "$v" -lt "$CHECKLIST_VERSION" ]; then st="v$v BEHIND"
     elif [ "$todo" != 0 ]; then st="v$v $todo TODO"
     else st="v$v OK"; fi
-    printf '%-10s %-34s %-8s %-10s %s\n' "${name:--}" "$id" "${setup:--}" "$st" "${at:--}"
-  done
+    printf '%-10s %-28s %-11s %-12s %s\n' "${name:--}" "$id" "${setup:--}" "$st" "${at:--}"
+  done | sort
   echo "current checklist: v$CHECKLIST_VERSION. Frames marked never/BEHIND/TODO: connect them and run checklist.sh -s <serial>."
   exit 0
 fi
