@@ -15,6 +15,7 @@ import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.media.MediaMetadataRetriever;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.net.wifi.WifiManager;
@@ -27,6 +28,7 @@ import android.os.SystemClock;
 import android.provider.Settings;
 import android.util.DisplayMetrics;
 import android.util.Log;
+import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.GradientDrawable;
@@ -35,6 +37,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -63,8 +66,10 @@ import java.util.regex.Pattern;
  *  - Plays a local video endlessly, fullscreen, screen kept on. Looping is
  *    driven by a watchdog, because some decoders (e.g. Allwinner CedarX) ignore
  *    MediaPlayer.setLooping and fire onCompletion at most once. At the end of a
- *    clip it seeks back to 0 (no black frame); a full reload, which flashes black,
- *    is only for stalls. Once a decoder is seen looping by itself, it's left alone. The watchdog
+ *    clip it goes back to the start in the smoothest way this decoder allows,
+ *    learnt on the first loops: it wraps by itself (Rockchip: left alone), seekTo(0)
+ *    works, or only a reload works (Allwinner CedarX). A reload rebuilds the surface,
+ *    which shows black, so the video's first frame covers the screen until it plays. The watchdog
  *    keeps running while menus/dialogs are open, so they never stop playback.
  *    Every (re)start is logged under the "VideoLoop" tag so tools can verify it.
  *  - Registered as the HOME launcher (via HomeAlias) so it boots straight in.
@@ -148,8 +153,15 @@ public class MainActivity extends Activity {
     private long prepareStartedAt;
     private int lastPos = -1;
     private int stallTicks;
-    // The decoder wraps by itself (setLooping honoured): leave the end of the clip to it.
-    private boolean nativeLoop;
+    // How this decoder loops: not known yet; wraps by itself (setLooping honoured:
+    // leave the end alone); stops at the end but seekTo(0) works; or only a reload works.
+    private static final int LOOP_UNKNOWN = 0, LOOP_NATIVE = 1, LOOP_SEEK = 2, LOOP_RELOAD = 3;
+    private int loopMode = LOOP_UNKNOWN;
+    private boolean wrapCheck;     // last tick saw a jump back to the start: confirm it plays on
+    private boolean justRewound;   // the next jump back to 0 is ours, not the decoder's
+    private int seekCheckTicks;    // after our seekTo(0): ticks left to see playback move on
+    private ImageView cover;       // the video's first frame, shown over a reload's black frame
+    private String coverPath;      // which video the cover belongs to
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -164,6 +176,11 @@ public class MainActivity extends Activity {
         root.addView(video, new FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT,
             Gravity.CENTER));
+        cover = new ImageView(this);
+        cover.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        cover.setVisibility(View.GONE);
+        root.addView(cover, new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
         setContentView(root);
         hideSystemUi();
 
@@ -172,10 +189,16 @@ public class MainActivity extends Activity {
                 mp.setLooping(true);   // honored on some decoders; watchdog covers the rest
                 preparing = false;
                 video.start();
+                // The first frame is up shortly after start(); then drop the cover.
+                handler.postDelayed(hideCover, 300);
             }
         });
         video.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
-            @Override public void onCompletion(MediaPlayer mp) { rewind(); }
+            @Override public void onCompletion(MediaPlayer mp) {
+                // A decoder that loops by itself never completes.
+                if (loopMode != LOOP_NATIVE) loopMode = LOOP_SEEK;
+                rewind();
+            }
         });
         video.setOnErrorListener(new MediaPlayer.OnErrorListener() {
             @Override public boolean onError(MediaPlayer mp, int what, int extra) {
@@ -259,6 +282,9 @@ public class MainActivity extends Activity {
         prepareStartedAt = SystemClock.uptimeMillis();
         lastPos = -1;
         stallTicks = 0;
+        wrapCheck = false;
+        seekCheckTicks = 0;
+        loadCover(path);
         video.setVideoURI(Uri.fromFile(new File(path)));
         video.start();
     }
@@ -268,16 +294,58 @@ public class MainActivity extends Activity {
      * frame. If the decoder doesn't resume, the stall check falls back to restart().
      */
     private void rewind() {
-        if (preparing) return;
+        if (preparing || seekCheckTicks > 0) return;   // one seek at a time
+        if (loopMode == LOOP_RELOAD) { reloadCovered(); return; }
         try {
             Log.i(TAG, "loop (seek)");
             video.seekTo(0);
             video.start();
-            lastPos = -1;      // the jump back to 0 isn't a native wrap
+            justRewound = true;
             stallTicks = 0;
+            seekCheckTicks = 2;
         } catch (Exception e) {
             restart();
         }
+    }
+
+    /** The end of a loop on a decoder that can only reload: hide the black behind the first frame. */
+    private void reloadCovered() {
+        if (preparing) return;
+        if (coverPath != null && coverPath.equals(currentVideo()) && cover.getDrawable() != null) {
+            handler.removeCallbacks(hideCover);
+            cover.setVisibility(View.VISIBLE);
+        }
+        int pos = -1, dur = -1;
+        try { pos = video.getCurrentPosition(); dur = video.getDuration(); } catch (Exception e) { /* ignore */ }
+        Log.i(TAG, "loop (reload) at " + pos + "/" + dur + " ms");
+        restart();
+    }
+
+    private final Runnable hideCover = new Runnable() {
+        @Override public void run() { cover.setVisibility(View.GONE); }
+    };
+
+    /** Grab the video's first frame in the background, once per video. */
+    private void loadCover(final String path) {
+        if (path.equals(coverPath)) return;
+        coverPath = path;
+        cover.setImageDrawable(null);
+        new Thread(new Runnable() {
+            @Override public void run() {
+                MediaMetadataRetriever r = new MediaMetadataRetriever();
+                try {
+                    r.setDataSource(path);
+                    final Bitmap b = r.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
+                    handler.post(new Runnable() {
+                        @Override public void run() { if (path.equals(coverPath)) cover.setImageBitmap(b); }
+                    });
+                } catch (Exception e) {
+                    Log.w(TAG, "no cover frame: " + e);
+                } finally {
+                    try { r.release(); } catch (Exception e) { /* ignore */ }
+                }
+            }
+        }).start();
     }
 
     /** Restart playback from scratch (debounced), deferred off any callback. Flashes black. */
@@ -294,6 +362,7 @@ public class MainActivity extends Activity {
      */
     private final Runnable watchdog = new Runnable() {
         @Override public void run() {
+            long delay = WATCHDOG_MS;
             if (resumed && video != null) {
                 if (preparing) {
                     if (SystemClock.uptimeMillis() - prepareStartedAt > PREPARE_TIMEOUT_MS) {
@@ -304,24 +373,59 @@ public class MainActivity extends Activity {
                     try {
                         int dur = video.getDuration();
                         int pos = video.getCurrentPosition();
-                        if (dur > 500 && pos >= dur - 250) {
-                            // A decoder that loops by itself is about to wrap: don't step on it.
-                            if (!nativeLoop) rewind();
-                        } else if (lastPos > 0 && pos + 1000 < lastPos) {
-                            // Decoder honoured setLooping and wrapped on its own.
-                            Log.i(TAG, "loop (native)");
-                            nativeLoop = true;
-                            stallTicks = 0;
+                        boolean jumpedBack = lastPos > 0 && pos + 1000 < lastPos;
+                        if (seekCheckTicks > 0) {
+                            // Our seekTo(0): did playback carry on from the start?
+                            if (lastPos >= 0 && pos > lastPos && pos < dur - 250) {
+                                seekCheckTicks = 0;
+                                if (loopMode != LOOP_NATIVE) loopMode = LOOP_SEEK;
+                            } else if (--seekCheckTicks == 0) {
+                                // It didn't (Allwinner CedarX near the end): reload from now on.
+                                Log.i(TAG, "seek doesn't restart this decoder; reloading instead");
+                                loopMode = LOOP_RELOAD;
+                                reloadCovered();
+                            }
+                        } else if (wrapCheck) {
+                            // Last tick the position went back to the start. A decoder that
+                            // loops plays on from there; one that stopped (and just reports
+                            // 0) doesn't.
+                            wrapCheck = false;
+                            if (pos > lastPos) {
+                                loopMode = LOOP_NATIVE;
+                                Log.i(TAG, "loop (native)");
+                                stallTicks = 0;
+                            } else {
+                                rewind();
+                            }
+                        } else if (jumpedBack) {
+                            if (loopMode == LOOP_NATIVE) {
+                                Log.i(TAG, "loop (native)");
+                                stallTicks = 0;
+                            } else {
+                                wrapCheck = true;
+                            }
+                        } else if (dur > 500 && pos >= dur - 250) {
+                            if (loopMode == LOOP_SEEK || loopMode == LOOP_RELOAD) rewind();
+                            else if (pos == lastPos) rewind();   // stopped at the end
+                            // LOOP_NATIVE / not yet known and still moving: let it wrap.
                         } else if (pos == lastPos) {
                             if (++stallTicks >= STALL_TICKS) restart();
                         } else {
                             stallTicks = 0;
                         }
-                        lastPos = pos;
+                        lastPos = justRewound ? -1 : pos;
+                        justRewound = false;
+                        // A decoder that stops at the end: wake ~50 ms before it, so the
+                        // seek/reload lands as the last frame shows (a miss just holds it).
+                        if ((loopMode == LOOP_SEEK || loopMode == LOOP_RELOAD) && dur > 500
+                                && seekCheckTicks == 0 && !preparing) {
+                            int left = dur - pos;
+                            if (left > 0 && left < WATCHDOG_MS + 250) delay = Math.max(20, left - 50);
+                        }
                     } catch (Exception e) { /* ignore */ }
                 }
             }
-            handler.postDelayed(this, WATCHDOG_MS);
+            handler.postDelayed(this, delay);
         }
     };
 

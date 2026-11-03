@@ -15,7 +15,8 @@
 #   4 = + original home app (Frameo) switched off or not; VideoLoop 2.5 (its revert
 #       turns a switched-off original app back on)
 #   5 = + VideoLoop 2.6 (no black flash between loops)
-CHECKLIST_VERSION=5
+#   6 = + VideoLoop 2.7 (same, also on decoders that stop at the end, e.g. Allwinner)
+CHECKLIST_VERSION=6
 . "$(dirname "$0")/lib.sh"
 
 if [ "$1" = --list ]; then

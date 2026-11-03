@@ -49,10 +49,17 @@ enabled, so a revert can never leave the frame with none.
 
 ## Video decoders
 
-Some decoders (Allwinner CedarX) ignore `MediaPlayer.setLooping` and fire
-`onCompletion` once; VideoLoop's watchdog restarts playback itself and logs
-`play <path>` each time. Decoders that do honour looping log `loop (native)`.
-`verify.sh` counts both. Safest test video: H.264 (High/Main), `yuv420p`, `.mp4`,
+VideoLoop learns on the first loops how this decoder loops, and logs it:
+
+| Decoder | Log per loop | What happens |
+|---|---|---|
+| Wraps by itself (`setLooping` honoured; Rockchip DP103) | `loop (native)` | Left alone: seamless. |
+| Stops at the end, `seekTo(0)` works | `loop (seek)` | Seeks back ~50 ms before the end: no black frame. |
+| Stops at the end, seeking there doesn't restart it (Allwinner CedarX, astar-d7) | `loop (reload) at <pos>/<dur> ms` + `play <path>` | Reloads ~50 ms before the end. A reload rebuilds the surface, which shows black, so the video's first frame covers the screen until it plays. |
+
+A `play <path>` without a `loop (reload)` just before it is an uncovered reload (a
+stall, a hung prepare, or a new video) and does flash black. `verify.sh` counts loops
+of every kind and reports uncovered reloads (`WARN`). Safest test video: H.264 (High/Main), `yuv420p`, `.mp4`,
 ideally at the panel's resolution (from the survey's `display=`).
 
 ## Wi-Fi

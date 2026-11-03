@@ -45,11 +45,14 @@ if [ "${events:-0}" -ge "$MIN" ]; then
 else
   check "looping: only ${events:-0} play/loop events in ${SECS}s (need $MIN; a clip longer than $((SECS / MIN))s needs a longer --seconds)" no
 fi
-# A full reload ("play /...") while it was already playing flashes black for a moment.
-# VideoLoop 2.6+ only reloads on a stall, so any here is worth a look (not a failure:
-# some decoders may still need it).
+# A full reload ("play /...") while it was already playing flashes black for a moment,
+# unless VideoLoop covered it with the video's first frame ("loop (reload)", 2.7+, on
+# decoders that can only loop by reloading, e.g. Allwinner CedarX). Not a failure.
 reloads="$(echo "$log" | grep -c 'play /')"
-if [ "${reloads:-0}" = 0 ]; then echo "PASS  no reloads (no black flashes between loops)"
-else echo "WARN  $reloads full reload(s) in ${SECS}s: each shows a brief black frame"; fi
+covered="$(echo "$log" | grep -c 'loop (reload)')"
+bare=$(( ${reloads:-0} - ${covered:-0} )); [ "$bare" -lt 0 ] && bare=0
+if [ "$bare" = 0 ]; then
+  echo "PASS  no black flashes between loops$([ "${covered:-0}" -gt 0 ] && echo " ($covered reloads covered by the first frame)")"
+else echo "WARN  $bare uncovered reload(s) in ${SECS}s: each shows a brief black frame"; fi
 
 [ "$fail" = 0 ] && echo "RESULT: all checks passed" || { echo "RESULT: some checks failed"; exit 1; }
