@@ -105,7 +105,8 @@ Root held by: <root_shells_held_by or "nothing">   Open ports: <listening or "no
   user's OK run `scripts/disable_updates.sh -s <serial>` (reversible with `--undo`;
   it waits until Android has saved the change, so a reboot can't lose it). If an
   update is staged, don't reboot until it's removed. `frameo_version` shows whether
-  Frameo has updated itself; that's an app update, reported but not blocked.
+  Frameo has updated itself (an app update, not Android); switching Frameo off
+  entirely after the install stops that (see step 8).
 - `risk` (a known hidden agent such as `iotv`, or a root process talking to the
   internet): **stop**. Recommend keeping the frame off the user's Wi-Fi, or on an
   isolated guest network, until it's dealt with. Then offer to neutralize it by
@@ -172,6 +173,15 @@ so ask what to call this one (e.g. "Living room", "Kitchen"; suggest something i
 don't mind) and run `scripts/set_name.sh -s <serial> "<name>"`. The name shows in
 VideoLoop's menu title and *Network info*, in `find_frames.sh`, and in the survey.
 Rename any time by running it again.
+
+**Switch the original app off (optional).** Once VideoLoop is the home screen,
+Frameo (or whatever the original home app was) still wakes up in the background: at
+boot, on network changes, from alarms and push messages. It then goes online, holds
+root shells and updates itself (one frame pulled a `..._OTA_test` build). Offer
+`scripts/original_app.sh -s <serial> --off`: it disables the whole package, only
+while VideoLoop is the home screen, and waits until Android has saved it. Frameo's
+photo sharing stops too, so it's the user's call. `--on` brings it back, and revert
+(`revert.sh`, and the app's own menu from VideoLoop 2.5) turns it back on first.
 
 ### 9. Load the test video
 `scripts/set_video.sh -s <serial> assets/test-video.mp4 --name loop.mp4` copies the
@@ -253,7 +263,7 @@ card insert). For version- or vendor-specific differences, **references/compatib
 
 ## Files
 - `scripts/` — `lib.sh` (shared), `find_frames.sh`, `survey.sh`, `security_scan.sh`, `snapshot.sh`,
-  `backup.sh`, `disable_updates.sh`, `network_adb.sh`, `checklist.sh`, `get_app.sh`, `install_app.sh`, `set_name.sh`, `set_video.sh`,
+  `backup.sh`, `disable_updates.sh`, `network_adb.sh`, `original_app.sh`, `checklist.sh`, `get_app.sh`, `install_app.sh`, `set_name.sh`, `set_video.sh`,
   `verify.sh`, `revert.sh`
 - `assets/test-video.mp4` — 4 s generated test pattern (ffmpeg `testsrc2`), 1280×800,
   H.264 High, no audio

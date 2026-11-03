@@ -106,7 +106,12 @@ case "$METHOD" in
     ;;
   disable)
     [ -n "$ORIG" ] || die "no original home recorded, so there is nothing to disable; use --method chooser"
-    run_ok "pm disable $ORIG" root || die "couldn't disable $ORIG as root"
+    # Root can be briefly busy right after the original app starts (Frameo grabs su
+    # shells as it comes up, e.g. just after a revert), so give it a few tries.
+    ok=no; for t in 1 2 3 4 5; do
+      run_ok "pm disable $ORIG" root 2>/dev/null && { ok=yes; break; }; sleep 2
+    done
+    [ "$ok" = yes ] || die "couldn't disable $ORIG as root"
     ;;
   chooser) ;;
   *) die "unknown method: $METHOD" ;;

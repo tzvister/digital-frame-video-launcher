@@ -27,27 +27,13 @@ pm_set() {   # enable|disable <pkg>
   elif [ "$1" = disable ]; then sh_ "pm disable-user $2"
   else sh_ "pm enable $2"; fi
 }
-# Wait until Android has written the state to disk (needs root to read; else skip).
-saved() {    # <pkg> <want: 2=disabled|1=enabled>
-  [ "$ROOT_MODE" = none ] && return 0
-  as_root "cat /data/system/users/0/package-restrictions.xml" \
-    | grep -E "name=\"$1\"" | grep -q "enabled=\"$2\"" && return 0
-  [ "$2" = 1 ] && ! as_root "cat /data/system/users/0/package-restrictions.xml" \
-    | grep -E "name=\"$1\"" | grep -q 'enabled="[234]"'
-}
-wait_saved() {
-  local i
-  for i in $(seq 1 45); do saved "$1" "$2" && return 0; sleep 2; done
-  return 1
-}
-
 if [ "$UNDO" = yes ]; then
   list="$(cat "$REC_MAC" 2>/dev/null)"
   [ -n "$list" ] || list="$(sh_ "cat $REC_DEV" | grep -v -i 'no such')"
   [ -n "$list" ] || die "no record of updaters disabled by this script on this frame"
   for p in $list; do
     pm_set enable "$p" >/dev/null
-    wait_saved "$p" 1 && echo "enabled $p" || warn "$p: enabled, but not yet saved to disk; wait before rebooting"
+    wait_pkg_saved "$p" on && echo "enabled $p" || warn "$p: enabled, but not yet saved to disk; wait before rebooting"
   done
   rm -f "$REC_MAC"; sh_ "rm $REC_DEV" >/dev/null
   echo "updates=on"
@@ -61,7 +47,7 @@ for p in $todo; do
   pm_set disable "$p" >/dev/null
   if updater_packages | grep -qx "$p disabled"; then
     done_list="$done_list $p"
-    wait_saved "$p" 2 && echo "disabled $p" || { warn "$p: disabled, but not yet saved to disk; wait a minute before rebooting"; fail=1; }
+    wait_pkg_saved "$p" off && echo "disabled $p" || { warn "$p: disabled, but not yet saved to disk; wait a minute before rebooting"; fail=1; }
   else
     warn "could not disable $p$([ "$ROOT_MODE" = none ] && echo ' (no root)')"; fail=1
   fi

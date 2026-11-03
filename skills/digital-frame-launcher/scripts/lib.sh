@@ -157,3 +157,20 @@ updater_packages() {
     if echo "$off" | grep -qx "$p"; then echo "$p disabled"; else echo "$p enabled"; fi
   done
 }
+
+# Is a whole package disabled? (pm list packages -d)
+pkg_disabled() { sh_ pm list packages -d | sed 's/^package://' | grep -qx "$1"; }
+# Android saves package state to disk lazily, and a reboot before that loses it. Wait
+# (up to ~90 s) until package-restrictions.xml has <pkg> disabled (want=off) or not
+# disabled (want=on). Needs root to read the file; without root it can't wait.
+wait_pkg_saved() {   # <pkg> off|on
+  [ "$(root_mode)" = none ] && return 0
+  local i line
+  for i in $(seq 1 45); do
+    line="$(as_root "cat /data/system/users/0/package-restrictions.xml" | grep "name=\"$1\"")"
+    if [ "$2" = off ]; then echo "$line" | grep -qE 'enabled="[234]"' && return 0
+    else echo "$line" | grep -qE 'enabled="[234]"' || return 0; fi
+    sleep 2
+  done
+  return 1
+}

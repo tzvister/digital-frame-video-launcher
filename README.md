@@ -38,7 +38,8 @@ automatically (it's linked from `.claude/skills/`). It:
 6. asks whether to keep adb on over Wi-Fi (port 5555) so the frame can be managed
    without a cable, and turns it on if you say yes,
 7. builds VideoLoop and makes it the home screen, the right way for that Android
-   version and root situation,
+   version and root situation, and offers to switch Frameo off entirely (it otherwise
+   keeps running in the background, going online and updating itself),
 8. asks what to call the frame (you'll likely have several, and their IPs change),
 9. loads a test video, verifies the loop across a reboot, and confirms it can be reverted.
 

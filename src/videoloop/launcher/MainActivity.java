@@ -1112,6 +1112,16 @@ public class MainActivity extends Activity {
     private void revertNextBoot(boolean switchNow) {
         String[] st = readState();          // {method, original_home}
         String method = st[0], original = st[1];
+        // original_app.sh may have switched the whole original app off: bring it back
+        // first, or its home screen can't come back.
+        if (original != null) {
+            String pkg = original.split("/")[0];
+            if (packageOff(pkg) && (!runSu("pm enable " + pkg) || packageOff(pkg))) {
+                toast("Couldn't get root on the frame to turn\n" + pkg
+                      + " back on.\nRun revert.sh from your computer instead.");
+                return;
+            }
+        }
         if ("disable".equals(method) && original != null) {
             if (!runSu("pm enable " + original)) {
                 toast("Couldn't get root on the frame to re-enable\n" + original
@@ -1139,6 +1149,17 @@ public class MainActivity extends Activity {
         } else {
             toast("Done. The next reboot will start the original home screen.\n"
                   + "The video keeps playing until then.");
+        }
+    }
+
+    private boolean packageOff(String pkg) {
+        try {
+            int s = getPackageManager().getApplicationEnabledSetting(pkg);
+            return s == PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+                || s == PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER
+                || s == PackageManager.COMPONENT_ENABLED_STATE_DISABLED_UNTIL_USED;
+        } catch (Exception e) {
+            return false;   // not installed: nothing to turn back on
         }
     }
 

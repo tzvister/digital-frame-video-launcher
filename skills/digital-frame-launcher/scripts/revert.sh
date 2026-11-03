@@ -47,6 +47,11 @@ if [ -n "$ORIG" ]; then
   opkg="${ORIG%%/*}"
   sh_ "pm path $opkg" | grep -q '^package:' || problems="$problems the original home app $opkg is no longer installed;"
 fi
+if [ -n "$ORIG" ] && pkg_disabled "${ORIG%%/*}"; then
+  echo "original_app=off (switched off with original_app.sh; revert turns it back on first)"
+  [ "$ROOT_MODE" = none ] && [ -f "$FRAMES_DIR/$ID/original_app_off" ] && \
+    problems="$problems ${ORIG%%/*} is switched off and root is no longer available to turn it back on;"
+fi
 if [ "$METHOD" = disable ] && [ "$ROOT_MODE" = none ]; then
   problems="$problems the original home was disabled with root, and root is no longer available;"
 fi
@@ -57,6 +62,13 @@ fi
 [ -z "$problems" ] || warn "continuing despite:$problems"
 
 # ---- 1. bring the original home back ----
+# The whole app first, if original_app.sh switched it off: its home screen can't
+# come back while the package is disabled.
+if [ -n "$ORIG" ] && pkg_disabled "${ORIG%%/*}"; then
+  run_ok "pm enable ${ORIG%%/*}" root 2>/dev/null || run_ok "pm enable ${ORIG%%/*}" \
+    || die "couldn't turn ${ORIG%%/*} back on; VideoLoop left in place"
+  rm -f "$FRAMES_DIR/$ID/original_app_off"
+fi
 case "$METHOD" in
   disable)   [ -n "$ORIG" ] && { run_ok "pm enable $ORIG" root || die "couldn't re-enable $ORIG as root; VideoLoop left in place"; } ;;
   preferred) [ -n "$ORIG" ] && [ "${S:-0}" -ge 24 ] && run_ok "cmd package set-home-activity $ORIG" ;;

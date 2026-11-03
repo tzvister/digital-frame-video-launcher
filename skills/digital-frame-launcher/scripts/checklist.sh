@@ -12,7 +12,9 @@
 #   2 = + security scan (hidden agents), Android/firmware updates off, no staged update,
 #       network adb state
 #   3 = + VideoLoop 2.4 (way back from Android Settings) and its overlay permission
-CHECKLIST_VERSION=3
+#   4 = + original home app (Frameo) switched off or not; VideoLoop 2.5 (its revert
+#       turns a switched-off original app back on)
+CHECKLIST_VERSION=4
 . "$(dirname "$0")/lib.sh"
 
 if [ "$1" = --list ]; then
@@ -85,7 +87,18 @@ item INFO "security scan: $(sk security)$([ "$(sk online)" = no ] && echo ', off
 if [ "$(prop persist.adb.tcp.port)" = 5555 ]; then item INFO "network adb on port 5555, kept after reboots" "turn off: scripts/network_adb.sh -s $SERIAL --off"
 else item INFO "network adb off after reboots" "turn on (user's choice): scripts/network_adb.sh -s $SERIAL"; fi
 
-# 8. VideoLoop installed, current, and the home screen with an install record.
+# 8. The original home app (Frameo): still allowed to run in the background, or off.
+oa="$("$HERE/original_app.sh" -s "$SERIAL" 2>/dev/null)"
+oa_pkg="$(echo "$oa" | sed -n 's/^original_app=//p')"
+if [ -n "$oa_pkg" ]; then
+  if [ "$(echo "$oa" | sed -n 's/^original_app_state=//p')" = off ]; then
+    item INFO "$oa_pkg switched off (no background runs, no self-updates)" "back on: scripts/original_app.sh -s $SERIAL --on"
+  else
+    item INFO "$oa_pkg still runs in the background$([ "$(echo "$oa" | sed -n 's/^original_app_running=//p')" = yes ] && echo ' (running now)')" "switch off (user's choice): scripts/original_app.sh -s $SERIAL --off"
+  fi
+fi
+
+# 9. VideoLoop installed, current, and the home screen with an install record.
 want="$(sed -n 's/.*android:versionName="\([^"]*\)".*/\1/p' "$REPO_DIR/AndroidManifest.xml" 2>/dev/null | head -1)"
 have="$(sh_ dumpsys package "$APP_PKG" | grep -m1 versionName | sed 's/.*versionName=//')"
 if [ -z "$have" ]; then item TODO "VideoLoop not installed" "steps 7-8 of SKILL.md (get_app.sh, install_app.sh)"
@@ -101,11 +114,11 @@ if [ -n "$have" ]; then
   fi
   sh_ "cat $P/$DEVICE_DIR/state" | grep -q '^method=' && item OK "install record on the frame" \
     || item TODO "no install record on the frame" "scripts/install_app.sh -s $SERIAL <apk>"
-  # 9. The way back.
+  # 10. The way back.
   "$HERE/revert.sh" -s "$SERIAL" --check 2>/dev/null | grep -q '^REVERT CHECK: OK' \
     && item OK "can be reverted to the original home screen" \
     || item TODO "revert check fails" "scripts/revert.sh -s $SERIAL --check (see its output)"
-  # 10. Playback (20 s, so only on request).
+  # 11. Playback (20 s, so only on request).
   if [ "$VERIFY" = yes ]; then
     "$HERE/verify.sh" -s "$SERIAL" 2>/dev/null | grep -q '^RESULT: all checks passed' \
       && item OK "video plays and loops" || item TODO "playback check fails" "scripts/verify.sh -s $SERIAL"
