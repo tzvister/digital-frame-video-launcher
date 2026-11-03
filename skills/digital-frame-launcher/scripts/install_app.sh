@@ -72,6 +72,13 @@ fi
 # permission, so grant it via root. Without it the app still dims this window
 # live and falls back to root to persist, but this makes it stick cleanly.
 [ "$ROOT_MODE" != none ] && as_root "appops set $APP_PKG WRITE_SETTINGS allow" >/dev/null 2>&1
+# "Draw over other apps" (also an appop; adb shell may set it on Android 6+): the app
+# floats a "Back to VideoLoop" button over Android Settings, since these frames have no
+# navigation bar. Without it, the app returns from Settings after a timeout instead.
+if [ "${S:-0}" -ge 23 ]; then
+  sh_ "appops set $APP_PKG SYSTEM_ALERT_WINDOW allow" >/dev/null 2>&1
+  [ "$ROOT_MODE" != none ] && as_root "appops set $APP_PKG SYSTEM_ALERT_WINDOW allow" >/dev/null 2>&1
+fi
 
 # 3. Pick how to take over the home screen (an earlier install's method wins).
 prev="$(sh_ cat "$P/$DEVICE_DIR/state" | sed -n 's/^method=//p')"

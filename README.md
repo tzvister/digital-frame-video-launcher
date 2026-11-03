@@ -69,7 +69,8 @@ Per-frame records (original state, name, backups) go to `frames/<frame-id>/`
     Settings app crashes on its own brightness slider; this avoids it).
   - *Screen & network info* shows the panel's **native resolution** (the size to make
     your video), the frame's name, IP, MAC and the `adb connect` line.
-  - *Open Android Settings* (Wi-Fi etc.), *Restore original home screen on next
+  - *Open Android Settings* (Wi-Fi etc.; these frames have no navigation bar, so a
+    floating *Back to VideoLoop* button sits over Settings), *Restore original home screen on next
     reboot*, *Switch to original home screen now*, *Reboot now*. Restoring uses the
     record the installer left in `<storage>/.videoloop/state`, and VideoLoop only
     steps aside once another home screen is confirmed to exist.

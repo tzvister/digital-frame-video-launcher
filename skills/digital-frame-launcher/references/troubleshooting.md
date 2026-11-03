@@ -62,6 +62,18 @@ left-to-right marks; if new dialogs are added, wrap file names the same way.
 without saying so; a tap of yours can land on a dialog they just opened. Before
 concluding "my tap did X", check `adb logcat` for `injectMotionEvent` vs real touches.
 
+**Stuck in Android Settings (no way back to the video).** Frameo frames ship with
+SystemUI disabled, so there's no navigation bar, and often only a power key. Some
+firmware (seen on the rockchip DP103) also kills the home app's process the moment
+Settings opens, logged as `Killing <pid>:videoloop.launcher ... user request after error`,
+which also clears VideoLoop's *preferred home* setting (it matters on Android 7+ frames
+using the `preferred` method: rerun `checklist.sh` afterwards). VideoLoop 2.4+ floats a
+*Back to VideoLoop* button over Settings from a separate process (`:back`), which
+survives that kill. It needs "draw over other apps" (`appops ... SYSTEM_ALERT_WINDOW`),
+granted by `install_app.sh` and by the app itself with root; without it the app returns
+from Settings after 5 minutes. To rescue a frame stuck now:
+`adb shell am start -n videoloop.launcher/.MainActivity`.
+
 **Two frames show the same USB serial.** Cheap frames of one model often share it
 (two rockchip DP103s both reported `7E5C1001`). The scripts key their records on
 `frame_id` (model + Android ID), so the records don't mix, but adb can't tell the

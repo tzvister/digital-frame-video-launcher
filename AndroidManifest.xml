@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="videoloop.launcher"
-    android:versionCode="14"
-    android:versionName="2.3">
+    android:versionCode="15"
+    android:versionName="2.4">
 
     <!-- targetSdk 28: new enough that Android 14/15 install it without the
          low-target block and Android 10+ skip the permission-review screen,
@@ -16,6 +16,8 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.REBOOT" />
+    <!-- The "Back to VideoLoop" button floated over Android Settings (frames have no nav bar). -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <application
         android:label="VideoLoop"
@@ -50,5 +52,12 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity-alias>
+
+        <!-- Floats "Back to VideoLoop" over Android Settings. Its own process, because
+             some frame firmware kills the home app's process when Settings opens. -->
+        <service
+            android:name=".MainActivity$BackButtonService"
+            android:process=":back"
+            android:exported="false" />
     </application>
 </manifest>

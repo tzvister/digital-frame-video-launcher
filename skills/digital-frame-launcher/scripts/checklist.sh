@@ -11,7 +11,8 @@
 #   1 = snapshot, name, VideoLoop current + home, revert check, playback
 #   2 = + security scan (hidden agents), Android/firmware updates off, no staged update,
 #       network adb state
-CHECKLIST_VERSION=2
+#   3 = + VideoLoop 2.4 (way back from Android Settings) and its overlay permission
+CHECKLIST_VERSION=3
 . "$(dirname "$0")/lib.sh"
 
 if [ "$1" = --list ]; then
@@ -93,6 +94,11 @@ else item OK "VideoLoop $have (current)"; fi
 if [ -n "$have" ]; then
   is_videoloop "$(current_home)" && item OK "VideoLoop is the home screen" \
     || item TODO "VideoLoop is not the home screen (now: $(current_home))" "scripts/install_app.sh -s $SERIAL <apk>"
+  if [ "$(sdk)" -ge 23 ] 2>/dev/null; then
+    sh_ "appops get $APP_PKG SYSTEM_ALERT_WINDOW" | grep -q allow \
+      && item OK "can float the Back button over Android Settings" \
+      || item TODO "no overlay permission: Android Settings would trap the user for 5 minutes" "scripts/install_app.sh -s $SERIAL <apk> (grants it)"
+  fi
   sh_ "cat $P/$DEVICE_DIR/state" | grep -q '^method=' && item OK "install record on the frame" \
     || item TODO "no install record on the frame" "scripts/install_app.sh -s $SERIAL <apk>"
   # 9. The way back.

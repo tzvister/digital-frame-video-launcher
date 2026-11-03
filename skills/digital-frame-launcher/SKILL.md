@@ -197,8 +197,8 @@ or INFO, and it records the frame as checked against the current checklist.
 Tell the user, briefly:
 - The frame's name, and that it now boots into the looping video; which video is playing.
 - Hidden menu: two-finger press-and-hold ~1.5 s → choose video, import from memory
-  card/USB, screen rotation, network info (IP/MAC), Android settings, restore the
-  original home screen, reboot.
+  card/USB, screen rotation, network info (IP/MAC), Android settings (tap the floating
+  *Back to VideoLoop* button to return), restore the original home screen, reboot.
 - How to undo: ask Claude to revert the frame, or the menu's *Restore original home
   screen*. Where the records live (`frames/<frame-id>/` in the repo, and
   `.videoloop/` on the frame).

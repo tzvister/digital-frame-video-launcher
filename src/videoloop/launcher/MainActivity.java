@@ -4,6 +4,7 @@ import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.ProgressDialog;
+import android.app.Service;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
@@ -21,17 +22,21 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
+import android.os.IBinder;
 import android.os.SystemClock;
 import android.provider.Settings;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.graphics.Color;
+import android.graphics.PixelFormat;
+import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.SeekBar;
+import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.VideoView;
 
@@ -129,6 +134,8 @@ public class MainActivity extends Activity {
     private static final long WATCHDOG_MS = 500;
     private static final long PREPARE_TIMEOUT_MS = 8000;
     private static final int STALL_TICKS = 4;      // ~2s without progress = frozen
+    // Without the overlay permission there's no button out of Android Settings, so come back on our own.
+    private static final long SETTINGS_TIMEOUT_MS = 5 * 60 * 1000;
 
     private VideoView video;
     private final Handler handler = new Handler();
@@ -989,12 +996,110 @@ public class MainActivity extends Activity {
     // ---------------- settings / revert / reboot ----------------
 
     private void openSettings() {
+        // These frames have no navigation bar or HOME key, and some firmware kills the
+        // home app's process as Settings opens. So grant the overlay permission now,
+        // while we still can, and let BackButtonService (its own process) bring us back.
+        if (!canOverlay(this)) runSu("appops set " + PKG + " SYSTEM_ALERT_WINDOW allow");
         try {
+            startService(new Intent(this, BackButtonService.class));
+            if (!canOverlay(this)) {
+                toast("Android Settings will close and the video come back in "
+                      + (SETTINGS_TIMEOUT_MS / 60000) + " minutes.");
+            }
             Intent i = new Intent(Settings.ACTION_SETTINGS);
             i.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(i);
         } catch (Exception e) {
+            stopService(new Intent(this, BackButtonService.class));
             toast("Couldn't open Settings.");
+        }
+    }
+
+    static boolean canOverlay(Context c) {
+        return Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(c);
+    }
+
+    /**
+     * Floats a "Back to VideoLoop" button over Android Settings, and returns to the
+     * video when it's tapped. Runs in its own process (":back" in the manifest)
+     * because some frame firmware kills the home app's process when Settings opens,
+     * which would take the button with it. Without the overlay permission it just
+     * returns after SETTINGS_TIMEOUT_MS. MainActivity stops it whenever it resumes.
+     */
+    public static class BackButtonService extends Service {
+        private final Handler handler = new Handler();
+        private View button;
+        private final Runnable back = new Runnable() {
+            @Override public void run() { goBack(); }
+        };
+
+        @Override public IBinder onBind(Intent intent) { return null; }
+
+        @Override
+        public int onStartCommand(Intent intent, int flags, int startId) {
+            handler.removeCallbacks(back);
+            if (button == null && !show()) {
+                Log.w(TAG, "settings: no overlay, returning after a timeout");
+                handler.postDelayed(back, SETTINGS_TIMEOUT_MS);
+            }
+            return START_NOT_STICKY;
+        }
+
+        private boolean show() {
+            if (!canOverlay(this)) return false;
+            float dp = getResources().getDisplayMetrics().density;
+            TextView b = new TextView(this);
+            b.setText("\u25C0  Back to VideoLoop");
+            b.setTextColor(Color.WHITE);
+            b.setTextSize(20);
+            int pad = (int) (14 * dp);
+            b.setPadding(pad + pad / 2, pad, pad + pad / 2, pad);
+            GradientDrawable bg = new GradientDrawable();
+            bg.setColor(0xCC000000);
+            bg.setCornerRadius(28 * dp);
+            bg.setStroke((int) (2 * dp), Color.WHITE);
+            b.setBackgroundDrawable(bg);
+            b.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) { goBack(); }
+            });
+            WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
+                Build.VERSION.SDK_INT >= 26 ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                                            : WindowManager.LayoutParams.TYPE_PHONE,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                    | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.TRANSLUCENT);
+            lp.gravity = Gravity.BOTTOM | Gravity.RIGHT;
+            lp.x = (int) (24 * dp);
+            lp.y = (int) (24 * dp);
+            try {
+                ((WindowManager) getSystemService(WINDOW_SERVICE)).addView(b, lp);
+                button = b;
+                Log.i(TAG, "settings: back button shown");
+                return true;
+            } catch (Exception e) {
+                Log.w(TAG, "settings: back button failed: " + e);
+                return false;
+            }
+        }
+
+        private void goBack() {
+            Log.i(TAG, "settings: back to the loop");
+            Intent i = new Intent(this, MainActivity.class);
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+            startActivity(i);
+            stopSelf();
+        }
+
+        @Override
+        public void onDestroy() {
+            handler.removeCallbacks(back);
+            if (button != null) {
+                try { ((WindowManager) getSystemService(WINDOW_SERVICE)).removeView(button); }
+                catch (Exception e) { /* already gone */ }
+                button = null;
+            }
+            super.onDestroy();
         }
     }
 
@@ -1136,6 +1241,8 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         resumed = true;
+        // Back from Android Settings, however we got here: drop the floating button.
+        stopService(new Intent(this, BackButtonService.class));
         if (video != null && !video.isPlaying() && !preparing) play();
     }
 
