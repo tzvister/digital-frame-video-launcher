@@ -61,3 +61,10 @@ left-to-right marks; if new dialogs are added, wrap file names the same way.
 **The user is touching the frame while you work.** They often are. Don't inject taps
 without saying so; a tap of yours can land on a dialog they just opened. Before
 concluding "my tap did X", check `adb logcat` for `injectMotionEvent` vs real touches.
+
+**Two frames show the same USB serial.** Cheap frames of one model often share it
+(two rockchip DP103s both reported `7E5C1001`). The scripts key their records on
+`frame_id` (model + Android ID), so the records don't mix, but adb can't tell the
+frames apart when both are plugged in by USB at once. Plug in one at a time, or use
+their `ip:5555` serials. Before acting on a "known" serial, check `frame_id` and
+`frame_name` in the survey match the frame you expect.
