@@ -16,7 +16,8 @@
 #       turns a switched-off original app back on)
 #   5 = + VideoLoop 2.6 (no black flash between loops)
 #   6 = + VideoLoop 2.7 (same, also on decoders that stop at the end, e.g. Allwinner)
-CHECKLIST_VERSION=6
+#   7 = + VideoLoop 2.8 (self-recovery: guard process, crash restart, health.log)
+CHECKLIST_VERSION=7
 . "$(dirname "$0")/lib.sh"
 
 if [ "$1" = --list ]; then
@@ -116,6 +117,11 @@ if [ -n "$have" ]; then
   fi
   sh_ "cat $P/$DEVICE_DIR/state" | grep -q '^method=' && item OK "install record on the frame" \
     || item TODO "no install record on the frame" "scripts/install_app.sh -s $SERIAL <apk>"
+  # Self-recovery (2.8+): the guard process, and what health.log recorded.
+  if sh_ ps | grep -q "$APP_PKG:guard"; then item OK "self-recovery guard running"
+  else item TODO "self-recovery guard not running" "scripts/install_app.sh -s $SERIAL <apk> (VideoLoop 2.8+ starts it)"; fi
+  ev="$(sh_ "cat $P/$DEVICE_DIR/health.log" | grep -E 'guard:|crash:' | tail -3)"
+  [ -n "$ev" ] && item INFO "recent recoveries in health.log: $(echo "$ev" | cut -c1-90 | tr '\n' ';')" "full log: adb shell cat $P/$DEVICE_DIR/health.log"
   # 10. The way back.
   "$HERE/revert.sh" -s "$SERIAL" --check 2>/dev/null | grep -q '^REVERT CHECK: OK' \
     && item OK "can be reverted to the original home screen" \

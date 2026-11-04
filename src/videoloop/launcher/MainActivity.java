@@ -2,7 +2,9 @@ package videoloop.launcher;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlarmManager;
 import android.app.AlertDialog;
+import android.app.PendingIntent;
 import android.app.ProgressDialog;
 import android.app.Service;
 import android.content.BroadcastReceiver;
@@ -48,6 +50,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.Inet4Address;
@@ -73,6 +76,10 @@ import java.util.regex.Pattern;
  *    keeps running while menus/dialogs are open, so they never stop playback.
  *    Every (re)start is logged under the "VideoLoop" tag so tools can verify it.
  *  - Registered as the HOME launcher (via HomeAlias) so it boots straight in.
+ *  - Recovers by itself: GuardService (own process) restarts VideoLoop when the video
+ *    stops advancing, and reboots the frame if that keeps failing (a wedged decoder);
+ *    a crash restarts the app instead of leaving Android's error dialog on screen.
+ *    Both, and periodic stats, go to <storage>/.videoloop/health.log.
  *  - When a memory card or USB stick is mounted, offers to copy its videos into
  *    local storage (<primary storage>/VideoLoop). Never deletes from the card.
  *  - Two-finger press-and-hold (~1.5s) opens a hidden admin menu.
@@ -88,6 +95,7 @@ public class MainActivity extends Activity {
     private static final String KEY_VIDEO = "video_path";
     private static final String KEY_ROTATION = "rotation";
     private static final String KEY_BRIGHTNESS = "brightness";   // 0-255; default max
+    private static final String KEY_CRASHES = "recent_crashes";  // wall-clock ms, comma-separated
     private static final int BRIGHTNESS_MAX = 255;
 
     private static final int CLASH_OVERWRITE = 0;
@@ -118,6 +126,7 @@ public class MainActivity extends Activity {
     private static final String ACTION_SET_ROTATION = PKG + ".SET_ROTATION";  // --ei mode <0-4>
     private static final String ACTION_PLAY = PKG + ".PLAY";                  // --es path <file>
     private static final String ACTION_REVERT = PKG + ".REVERT";              // --es confirm yes
+    private static final String ACTION_TEST_CRASH = PKG + ".TEST_CRASH";      // checks crash restart
 
     // Played (relative to primary storage) until a video is chosen in the menu.
     private static final String[] DEFAULTS = { "loop.mp4", "VideoLoop/loop.mp4", "Download/loop.mp4" };
@@ -161,6 +170,14 @@ public class MainActivity extends Activity {
     private boolean justRewound;   // the next jump back to 0 is ours, not the decoder's
     private int seekCheckTicks;    // after our seekTo(0): ticks left to see playback move on
     private ImageView cover;       // the video's first frame, shown over a reload's black frame
+    // Health: what GuardService watches, and counters for health.log.
+    private static final String HEARTBEAT = "heartbeat";
+    private static final String HEALTH_LOG = ".videoloop/health.log";
+    private static final long HEARTBEAT_MS = 5000, STATS_MS = 10 * 60 * 1000;
+    private boolean hasVideo;      // something to play (else the guard has nothing to expect)
+    private long progressAt;       // elapsedRealtime of the last sign the video is advancing
+    private long heartbeatAt, statsAt;
+    private int nLoops, nPlays;
     private String coverPath;      // which video the cover belongs to
 
     @Override
@@ -228,6 +245,12 @@ public class MainActivity extends Activity {
                 Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQ_STORAGE);
         }
 
+        installCrashRestart();
+        progressAt = SystemClock.elapsedRealtime();
+        statsAt = progressAt;
+        health(this, "start VideoLoop " + versionName());
+        startService(new Intent(this, GuardService.class));
+
         play();
         handler.postDelayed(watchdog, 1000);
         handleIntent(getIntent());
@@ -260,6 +283,9 @@ public class MainActivity extends Activity {
             if (path != null && new File(path).isFile()) setVideo(path);
             else Log.w(TAG, "PLAY: no such file " + path);
         }
+        else if (ACTION_TEST_CRASH.equals(a)) {
+            throw new RuntimeException("test crash (" + ACTION_TEST_CRASH + ")");
+        }
         else if (ACTION_REVERT.equals(a) && "yes".equals(intent.getStringExtra("confirm"))) {
             revertNextBoot(false);   // same safety checks as the menu item
         }
@@ -276,8 +302,10 @@ public class MainActivity extends Activity {
 
     private void play() {
         String path = currentVideo();
+        hasVideo = path != null;
         if (path == null) { preparing = false; Log.w(TAG, "no video to play"); return; }
         Log.i(TAG, "play " + path);
+        nPlays++;
         preparing = true;
         prepareStartedAt = SystemClock.uptimeMillis();
         lastPos = -1;
@@ -298,6 +326,7 @@ public class MainActivity extends Activity {
         if (loopMode == LOOP_RELOAD) { reloadCovered(); return; }
         try {
             Log.i(TAG, "loop (seek)");
+            nLoops++;
             video.seekTo(0);
             video.start();
             justRewound = true;
@@ -318,6 +347,7 @@ public class MainActivity extends Activity {
         int pos = -1, dur = -1;
         try { pos = video.getCurrentPosition(); dur = video.getDuration(); } catch (Exception e) { /* ignore */ }
         Log.i(TAG, "loop (reload) at " + pos + "/" + dur + " ms");
+        nLoops++;
         restart();
     }
 
@@ -393,6 +423,7 @@ public class MainActivity extends Activity {
                             if (pos > lastPos) {
                                 loopMode = LOOP_NATIVE;
                                 Log.i(TAG, "loop (native)");
+                                nLoops++;
                                 stallTicks = 0;
                             } else {
                                 rewind();
@@ -400,6 +431,7 @@ public class MainActivity extends Activity {
                         } else if (jumpedBack) {
                             if (loopMode == LOOP_NATIVE) {
                                 Log.i(TAG, "loop (native)");
+                                nLoops++;
                                 stallTicks = 0;
                             } else {
                                 wrapCheck = true;
@@ -413,6 +445,7 @@ public class MainActivity extends Activity {
                         } else {
                             stallTicks = 0;
                         }
+                        if (lastPos >= 0 && pos > lastPos) progressAt = SystemClock.elapsedRealtime();
                         lastPos = justRewound ? -1 : pos;
                         justRewound = false;
                         // A decoder that stops at the end: wake ~50 ms before it, so the
@@ -425,9 +458,102 @@ public class MainActivity extends Activity {
                     } catch (Exception e) { /* ignore */ }
                 }
             }
+            tickHealth();
             handler.postDelayed(this, delay);
         }
     };
+
+    /** Heartbeat for GuardService every few seconds, stats to health.log every 10 min. */
+    private void tickHealth() {
+        long now = SystemClock.elapsedRealtime();
+        // Only the instance in front speaks for VideoLoop: other instances (an older
+        // task, the direct MainActivity launch) are paused and said so in onPause.
+        if (resumed && now - heartbeatAt >= HEARTBEAT_MS) {
+            heartbeatAt = now;
+            writeHeartbeat(hasVideo);
+        }
+        if (now - statsAt >= STATS_MS) {
+            statsAt = now;
+            String[] fds = new File("/proc/self/fd").list();
+            String[] tasks = new File("/proc/self/task").list();
+            health(this, "stats loops=" + nLoops + " plays=" + nPlays + " mode=" + loopMode
+                + " fds=" + (fds == null ? -1 : fds.length) + " threads=" + (tasks == null ? -1 : tasks.length)
+                + " heapKB=" + (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()) / 1024
+                + " nativeKB=" + android.os.Debug.getNativeHeapAllocatedSize() / 1024);
+        }
+    }
+
+    private void writeHeartbeat(boolean playing) {
+        try {
+            FileWriter w = new FileWriter(new File(getFilesDir(), HEARTBEAT));
+            w.write(android.os.Process.myPid() + " " + (playing ? 1 : 0) + " " + progressAt + "\n");
+            w.close();
+        } catch (Exception e) { /* best effort */ }
+    }
+
+    /** Appends a timestamped line to <storage>/.videoloop/health.log (kept under ~256 KB). */
+    static void health(Context c, String line) {
+        try {
+            File f = new File(localRoot(), HEALTH_LOG);
+            f.getParentFile().mkdirs();
+            if (f.length() > 256 * 1024) f.renameTo(new File(f.getPath() + ".1"));
+            FileWriter w = new FileWriter(f, true);
+            w.write(new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(new java.util.Date())
+                    + " [" + android.os.Process.myPid() + "] " + line + "\n");
+            w.close();
+        } catch (Throwable e) {
+            Log.w(TAG, "health log: " + e);
+        }
+        Log.i(TAG, "health: " + line);
+    }
+
+    /** Back to VideoLoop the way the frame does it: through HOME, so no extra instance. */
+    static Intent homeIntent() {
+        Intent i = new Intent(Intent.ACTION_MAIN);
+        i.addCategory(Intent.CATEGORY_HOME);
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        return i;
+    }
+
+    private String versionName() {
+        try { return getPackageManager().getPackageInfo(PKG, 0).versionName; } catch (Exception e) { return "?"; }
+    }
+
+    /**
+     * An uncaught exception would leave Android's "VideoLoop has stopped" dialog on a
+     * screen nobody may touch for days. Log it and come back in a moment instead.
+     */
+    private void installCrashRestart() {
+        final Context app = getApplicationContext();
+        Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+            @Override public void uncaughtException(Thread t, Throwable e) {
+                try {
+                    String trace = Log.getStackTraceString(e);
+                    health(app, "crash: " + (trace.length() > 1500 ? trace.substring(0, 1500) : trace).replace('\n', '|'));
+                    // A crash on startup would loop: after 3 within a minute, stop coming
+                    // back by ourselves and leave it to GuardService (once a minute).
+                    SharedPreferences p = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+                    long now = System.currentTimeMillis();
+                    StringBuilder recent = new StringBuilder();
+                    int n = 0;
+                    for (String c : p.getString(KEY_CRASHES, "").split(",")) {
+                        try { if (now - Long.parseLong(c) < 60000) { recent.append(c).append(','); n++; } }
+                        catch (Exception ignored) { /* empty or junk */ }
+                    }
+                    p.edit().putString(KEY_CRASHES, recent.toString() + now).commit();
+                    if (n < 3) {
+                        PendingIntent pi = PendingIntent.getActivity(app, 0, homeIntent(), PendingIntent.FLAG_ONE_SHOT);
+                        ((AlarmManager) app.getSystemService(Context.ALARM_SERVICE))
+                            .set(AlarmManager.ELAPSED_REALTIME, SystemClock.elapsedRealtime() + 1500, pi);
+                    } else {
+                        health(app, "crash: 3+ in a minute; not restarting by ourselves, the guard will");
+                    }
+                } catch (Throwable ignored) { /* nothing more we can do */ }
+                android.os.Process.killProcess(android.os.Process.myPid());
+                System.exit(10);
+            }
+        });
+    }
 
     private String currentVideo() {
         SharedPreferences p = getSharedPreferences(PREFS, Context.MODE_PRIVATE);
@@ -1147,6 +1273,79 @@ public class MainActivity extends Activity {
     }
 
     /**
+     * Watches VideoLoop from its own process (":guard"), so it still works when the
+     * main thread is stuck (e.g. in a wedged decoder call). Every 15 s it reads the
+     * heartbeat MainActivity writes; if the video should be playing but hasn't
+     * advanced for a minute, it kills and relaunches VideoLoop. If that happens
+     * MAX_RESTARTS times within 15 minutes, the decoder itself is wedged, so it
+     * reboots the frame with root, at most once every 6 hours (a broken video file
+     * mustn't become a reboot loop).
+     */
+    public static class GuardService extends Service {
+        private static final long CHECK_MS = 15000, STUCK_MS = 60000;
+        private static final long WINDOW_MS = 15 * 60 * 1000, REBOOT_GAP_MS = 6 * 3600 * 1000;
+        private static final int MAX_RESTARTS = 3;
+        private static final String LAST_REBOOT = "guard_last_reboot";   // wall clock, survives reboots
+        private final Handler h = new Handler();
+        private final ArrayList<Long> restarts = new ArrayList<Long>();
+        private final Runnable check = new Runnable() {
+            @Override public void run() { checkOnce(); h.postDelayed(this, CHECK_MS); }
+        };
+
+        @Override public IBinder onBind(Intent intent) { return null; }
+
+        @Override
+        public int onStartCommand(Intent intent, int flags, int startId) {
+            h.removeCallbacks(check);
+            h.postDelayed(check, CHECK_MS);
+            return START_STICKY;
+        }
+
+        private void checkOnce() {
+            String[] hb = null;
+            try {
+                BufferedReader r = new BufferedReader(new FileReader(new File(getFilesDir(), HEARTBEAT)));
+                String line = r.readLine();
+                r.close();
+                if (line != null) hb = line.trim().split(" ");
+            } catch (Exception e) { return; }
+            if (hb == null || hb.length < 3 || !"1".equals(hb[1])) return;
+            long stuck = SystemClock.elapsedRealtime() - Long.parseLong(hb[2]);
+            if (stuck < STUCK_MS) return;
+            long now = SystemClock.elapsedRealtime();
+            while (!restarts.isEmpty() && now - restarts.get(0) > WINDOW_MS) restarts.remove(0);
+            if (restarts.size() >= MAX_RESTARTS && rebootAllowed()) {
+                health(this, "guard: still no progress after " + restarts.size()
+                       + " restarts in 15 min; rebooting the frame");
+                getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                    .putLong(LAST_REBOOT, System.currentTimeMillis()).commit();
+                try { Runtime.getRuntime().exec(new String[]{"su", "-c", "reboot"}); }
+                catch (Exception e) { health(this, "guard: reboot failed: " + e); }
+                return;
+            }
+            restarts.add(now);
+            health(this, "guard: video stuck for " + stuck / 1000 + " s; restarting VideoLoop (pid " + hb[0] + ")");
+            try {   // mark it fresh so the next check gives the new process its minute
+                FileWriter w = new FileWriter(new File(getFilesDir(), HEARTBEAT));
+                w.write("0 1 " + now + "\n");
+                w.close();
+            } catch (Exception e) { /* ignore */ }
+            try {
+                int pid = Integer.parseInt(hb[0]);
+                if (pid > 0 && pid != android.os.Process.myPid()) android.os.Process.killProcess(pid);
+            } catch (Exception e) { /* ignore */ }
+            h.postDelayed(new Runnable() {
+                @Override public void run() { startActivity(homeIntent()); }
+            }, 1000);
+        }
+
+        private boolean rebootAllowed() {
+            long last = getSharedPreferences(PREFS, Context.MODE_PRIVATE).getLong(LAST_REBOOT, 0);
+            return System.currentTimeMillis() - last > REBOOT_GAP_MS;
+        }
+    }
+
+    /**
      * Floats a "Back to VideoLoop" button over Android Settings, and returns to the
      * video when it's tapped. Runs in its own process (":back" in the manifest)
      * because some frame firmware kills the home app's process when Settings opens,
@@ -1212,9 +1411,7 @@ public class MainActivity extends Activity {
 
         private void goBack() {
             Log.i(TAG, "settings: back to the loop");
-            Intent i = new Intent(this, MainActivity.class);
-            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
-            startActivity(i);
+            startActivity(homeIntent());
             stopSelf();
         }
 
@@ -1389,6 +1586,8 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         resumed = true;
+        progressAt = SystemClock.elapsedRealtime();   // give playback a fresh minute
+        writeHeartbeat(hasVideo);
         // Back from Android Settings, however we got here: drop the floating button.
         stopService(new Intent(this, BackButtonService.class));
         if (video != null && !video.isPlaying() && !preparing) play();
@@ -1397,6 +1596,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onPause() {
         resumed = false;
+        writeHeartbeat(false);   // paused (menus elsewhere, Android Settings): nothing to guard
         super.onPause();
     }
 

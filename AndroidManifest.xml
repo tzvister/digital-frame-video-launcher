@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="videoloop.launcher"
-    android:versionCode="18"
-    android:versionName="2.7">
+    android:versionCode="19"
+    android:versionName="2.8">
 
     <!-- targetSdk 28: new enough that Android 14/15 install it without the
          low-target block and Android 10+ skip the permission-review screen,
@@ -58,6 +58,13 @@
         <service
             android:name=".MainActivity$BackButtonService"
             android:process=":back"
+            android:exported="false" />
+
+        <!-- Restarts VideoLoop if the video stops advancing (and reboots if that keeps
+             failing). Its own process, so a stuck main thread can't take it down. -->
+        <service
+            android:name=".MainActivity$GuardService"
+            android:process=":guard"
             android:exported="false" />
     </application>
 </manifest>

@@ -174,3 +174,21 @@ wait_pkg_saved() {   # <pkg> off|on
   done
   return 1
 }
+
+# Tap OK on any "VideoLoop has stopped / isn't responding" dialog. A crash while the app
+# is being replaced (before its code runs, so its own crash handler can't help) leaves
+# one on screen, and these frames have nobody to tap it. Prints how many it closed.
+dismiss_crash_dialogs() {
+  local n=0 i b x y
+  for i in 1 2 3; do
+    sh_ dumpsys window windows | grep -qE "Application (Error|Not Responding): $APP_PKG" || break
+    b="$(sh_ 'uiautomator dump /sdcard/.vl_ui.xml >/dev/null 2>&1; cat /sdcard/.vl_ui.xml; rm /sdcard/.vl_ui.xml' \
+         | grep -oE 'resource-id="android:id/button1"[^>]*bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' \
+         | grep -oE '[0-9]+' | tail -4 | tr '\n' ' ')"
+    set -- $b
+    [ $# -eq 4 ] || break
+    x=$(( ($1 + $3) / 2 )); y=$(( ($2 + $4) / 2 ))
+    sh_ "input tap $x $y" >/dev/null; n=$((n + 1)); sleep 1
+  done
+  echo "$n"
+}

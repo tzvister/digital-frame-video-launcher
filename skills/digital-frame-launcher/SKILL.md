@@ -209,6 +209,9 @@ Tell the user, briefly:
 - Hidden menu: two-finger press-and-hold ~1.5 s → choose video, import from memory
   card/USB, screen rotation, network info (IP/MAC), Android settings (tap the floating
   *Back to VideoLoop* button to return), restore the original home screen, reboot.
+- It looks after itself: if the video stops advancing for a minute, VideoLoop restarts;
+  if that keeps failing it reboots the frame (at most every 6 hours). Events go to
+  `.videoloop/health.log` on the frame.
 - How to undo: ask Claude to revert the frame, or the menu's *Restore original home
   screen*. Where the records live (`frames/<frame-id>/` in the repo, and
   `.videoloop/` on the frame).

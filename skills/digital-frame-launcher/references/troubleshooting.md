@@ -74,6 +74,24 @@ granted by `install_app.sh` and by the app itself with root; without it the app 
 from Settings after 5 minutes. To rescue a frame stuck now:
 `adb shell am start -n videoloop.launcher/.MainActivity`.
 
+**The video froze, or "VideoLoop has stopped", after hours of looping.** Seen on
+Frame1 (Allwinner CedarX, a 3 s clip, so ~1,200 reloads an hour): playback stopped
+after ~7.5 hours, the main thread stuck (Android recorded an ANR when it was touched),
+and opening the menu then crashed with `DeadObjectException`. The app's and the
+system's handles, threads and memory were flat over hundreds of reloads, so it looks
+like the vendor decoder wedging, not a VideoLoop leak. VideoLoop 2.8+ recovers by
+itself: GuardService (process `:guard`) restarts it when the video hasn't advanced for
+60 s, and after 3 restarts in 15 minutes reboots the frame with root (at most once per
+6 hours); a crash restarts the app instead of leaving Android's error dialog. All of it,
+plus stats every 10 minutes, goes to `<storage>/.videoloop/health.log`; read that first
+(`adb shell cat /sdcard/.videoloop/health.log`), and `adb shell dumpsys window lastanr`
+for the last freeze. Longer clips mean fewer reloads on CedarX frames.
+
+**"VideoLoop has stopped" right after an install.** Replacing the app can crash a
+process Android starts mid-install (the home screen, the guard), before VideoLoop's own
+crash handler exists. `install_app.sh` taps the dialog's OK afterwards
+(`dismiss_crash_dialogs` in `lib.sh`).
+
 **Two frames show the same USB serial.** Cheap frames of one model often share it
 (two rockchip DP103s both reported `7E5C1001`). The scripts key their records on
 `frame_id` (model + Android ID), so the records don't mix, but adb can't tell the

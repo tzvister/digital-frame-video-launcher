@@ -155,4 +155,8 @@ if [ -n "$PREV_VIDEO" ] && [ "$(sh_ "[ -f '$PREV_VIDEO' ] && echo yes")" = yes ]
   a shell "am start -n $APP_MAIN -a $APP_PKG.PLAY --es path '$PREV_VIDEO'" >/dev/null 2>&1
   echo "resumed_video=$PREV_VIDEO"
 fi
+# Replacing the app can crash a process that starts mid-install (Android restarts the
+# home screen and VideoLoop's services right away), leaving an error dialog behind.
+closed="$(dismiss_crash_dialogs)"
+[ "${closed:-0}" -gt 0 ] && info "Closed $closed leftover 'VideoLoop has stopped' dialog(s) from the install"
 echo "RESULT: VideoLoop is the home screen"
