@@ -48,9 +48,11 @@ fi
 # A full reload ("play /...") while it was already playing flashes black for a moment,
 # unless VideoLoop covered it with the video's first frame ("loop (reload)", 2.7+, on
 # decoders that can only loop by reloading, e.g. Allwinner CedarX). Not a failure.
-reloads="$(echo "$log" | grep -c 'play /')"
 covered="$(echo "$log" | grep -c 'loop (reload)')"
-bare=$(( ${reloads:-0} - ${covered:-0} )); [ "$bare" -lt 0 ] && bare=0
+# A "play" is uncovered unless the event just before it is "loop (reload)". The first
+# event in the window is skipped: what came before it isn't in the log.
+bare="$(echo "$log" | grep -oE 'play /|loop \((native|seek|reload)' | awk '
+  NR > 1 && $0 == "play /" && prev != "loop (reload" { n++ } { prev = $0 } END { print n + 0 }')"
 if [ "$bare" = 0 ]; then
   echo "PASS  no black flashes between loops$([ "${covered:-0}" -gt 0 ] && echo " ($covered reloads covered by the first frame)")"
 else echo "WARN  $bare uncovered reload(s) in ${SECS}s: each shows a brief black frame"; fi
